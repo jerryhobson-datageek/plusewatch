@@ -1,0 +1,27 @@
+{
+  "port": 3000,
+  "interval": 30,
+  "services": [
+    {
+      "id": 1,
+      "name": "Nginx Proxy Manager",
+      "url": "https://proxy.newtekk.com",
+      "type": "HTTP",
+      "degradedThreshold": 1000
+    },
+    {
+      "id": 2,
+      "name": "Portainer",
+      "url": "https://docker.newtekk.com",
+      "type": "HTTP",
+      "degradedThreshold": 1000
+    },
+    {
+      "id": 3,
+      "name": "WireGuard Easy",
+      "url": "https://vpn.newtekk.com",
+      "type": "HTTP",
+      "degradedThreshold": 1000
+    }
+  ]
+}

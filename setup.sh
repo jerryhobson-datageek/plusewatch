@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# PulseWatch installer — run as root on Ubuntu/Debian/RHEL/Rocky
+set -e
+
+# ── Detect OS ──────────────────────────────────────────────────────────────────
+if   command -v apt-get &>/dev/null; then PKG=apt
+elif command -v dnf     &>/dev/null; then PKG=dnf
+elif command -v yum     &>/dev/null; then PKG=yum
+else echo "Unsupported package manager. Install Node.js 18+ manually."; exit 1
+fi
+
+# ── Install Node.js if missing ─────────────────────────────────────────────────
+if ! command -v node &>/dev/null; then
+  echo "[1/5] Installing Node.js..."
+  if [ "$PKG" = "apt" ]; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+  else
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+    $PKG install -y nodejs
+  fi
+else
+  echo "[1/5] Node.js $(node -v) already installed — skipping."
+fi
+
+# ── Install nginx if missing ───────────────────────────────────────────────────
+if ! command -v nginx &>/dev/null; then
+  echo "[2/5] Installing nginx..."
+  $PKG install -y nginx
+else
+  echo "[2/5] nginx already installed — skipping."
+fi
+
+# ── Copy files ─────────────────────────────────────────────────────────────────
+echo "[3/5] Deploying files to /opt/pulsewatch..."
+mkdir -p /opt/pulsewatch
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cp "$SCRIPT_DIR/server.js"    /opt/pulsewatch/server.js
+cp "$SCRIPT_DIR/index.html"   /opt/pulsewatch/index.html
+
+# Only copy config if it doesn't already exist (preserve user edits)
+if [ ! -f /opt/pulsewatch/config.json ]; then
+  cp "$SCRIPT_DIR/config.json" /opt/pulsewatch/config.json
+  echo "      → config.json installed. Edit /opt/pulsewatch/config.json with your services."
+else
+  echo "      → config.json already exists — keeping your existing config."
+fi
+
+chown -R www-data:www-data /opt/pulsewatch 2>/dev/null || \
+  chown -R nginx:nginx      /opt/pulsewatch 2>/dev/null || true
+
+# ── systemd service ────────────────────────────────────────────────────────────
+echo "[4/5] Installing systemd service..."
+cp "$SCRIPT_DIR/pulsewatch.service" /etc/systemd/system/pulsewatch.service
+
+# Fix user in service file based on what's available
+if id www-data &>/dev/null; then
+  SVC_USER=www-data
+else
+  SVC_USER=nginx
+  sed -i "s/User=www-data/User=nginx/" /etc/systemd/system/pulsewatch.service
+fi
+
+systemctl daemon-reload
+systemctl enable pulsewatch
+systemctl restart pulsewatch
+
+# ── nginx reverse proxy ────────────────────────────────────────────────────────
+echo "[5/5] Configuring nginx..."
+
+NGINX_CONF=/etc/nginx/sites-available/pulsewatch
+[ -d /etc/nginx/sites-available ] || NGINX_CONF=/etc/nginx/conf.d/pulsewatch.conf
+
+cat > "$NGINX_CONF" <<'NGINX'
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+NGINX
+
+# Enable the site on Debian/Ubuntu
+if [ -d /etc/nginx/sites-enabled ]; then
+  ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/pulsewatch
+  # Remove default site if present to avoid port conflict
+  rm -f /etc/nginx/sites-enabled/default
+fi
+
+nginx -t && systemctl restart nginx
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+SERVER_IP=$(hostname -I | awk '{print $1}')
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  PulseWatch is running!"
+echo ""
+echo "  Dashboard  →  http://$SERVER_IP"
+echo "  Direct     →  http://$SERVER_IP:3000"
+echo ""
+echo "  Edit services:  nano /opt/pulsewatch/config.json"
+echo "  View logs:      journalctl -u pulsewatch -f"
+echo "  Restart:        systemctl restart pulsewatch"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

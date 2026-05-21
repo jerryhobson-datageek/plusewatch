@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PulseWatch — Status Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #080b14;
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.07);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --green: #22d3a0;
+    --green-glow: rgba(34,211,160,0.3);
+    --red: #f43f5e;
+    --red-glow: rgba(244,63,94,0.3);
+    --yellow: #f59e0b;
+    --yellow-glow: rgba(245,158,11,0.3);
+    --blue: #3b82f6;
+    --purple: #a855f7;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background blobs */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -20%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -10%;
+    right: -5%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(34,211,160,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+    background: rgba(8,11,20,0.8);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; margin-left: 2px; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--green);
+    background: rgba(34,211,160,0.1);
+    border: 1px solid rgba(34,211,160,0.2);
+    border-radius: 20px;
+    padding: 4px 10px;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .header-time {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  /* ── SUMMARY CARDS ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 900px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .summary-grid { grid-template-columns: 1fr; } }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background 0.2s;
+    backdrop-filter: blur(12px);
+  }
+
+  .summary-card:hover { background: var(--surface-hover); }
+
+  .summary-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .summary-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .summary-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .val-green { color: var(--green); }
+  .val-red   { color: var(--red); }
+  .val-yellow{ color: var(--yellow); }
+  .val-white { color: var(--text); }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .sort-controls {
+    display: flex;
+    gap: 6px;
+  }
+
+  .sort-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .sort-btn:hover, .sort-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* ── MONITORS GRID ── */
+  .monitors-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1rem;
+  }
+
+  /* ── MONITOR CARD ── */
+  .monitor-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all 0.2s;
+    backdrop-filter: blur(12px);
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .monitor-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .monitor-card.up::before {
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: 1;
+  }
+
+  .monitor-card.down::before {
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+    opacity: 1;
+  }
+
+  .monitor-card.degraded::before {
+    background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+    opacity: 1;
+  }
+
+  .monitor-card:hover {
+    background: var(--surface-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  }
+
+  /* Card top row */
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-ring {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  .status-ring svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 34px;
+    height: 34px;
+    transform: rotate(-90deg);
+  }
+
+  .status-ring circle.track {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 3;
+  }
+
+  .status-ring circle.progress {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease;
+  }
+
+  .status-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .status-dot.up     { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+  .status-dot.down   { background: var(--red);   box-shadow: 0 0 8px var(--red-glow); }
+  .status-dot.degraded { background: var(--yellow); box-shadow: 0 0 8px var(--yellow-glow); }
+
+  .status-dot.up { animation: pulse-green 2s ease-in-out infinite; }
+  .status-dot.down { animation: pulse-red 1s ease-in-out infinite; }
+
+  @keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 4px var(--green-glow); }
+    50%       { box-shadow: 0 0 14px var(--green-glow), 0 0 24px var(--green-glow); }
+  }
+
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 4px var(--red-glow); }
+    50%       { box-shadow: 0 0 14px var(--red-glow), 0 0 24px var(--red-glow); }
+  }
+
+  .card-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .card-name h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .card-name .card-url {
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  .status-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .badge-up       { background: rgba(34,211,160,0.12); color: var(--green); border: 1px solid rgba(34,211,160,0.25); }
+  .badge-down     { background: rgba(244,63,94,0.12);  color: var(--red);   border: 1px solid rgba(244,63,94,0.25); }
+  .badge-degraded { background: rgba(245,158,11,0.12); color: var(--yellow);border: 1px solid rgba(245,158,11,0.25); }
+
+  /* Stats row */
+  .card-stats {
+    display: flex;
+    gap: 0;
+  }
+
+  .stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px;
+    border-right: 1px solid var(--border);
+  }
+
+  .stat-item:first-child { padding-left: 0; }
+  .stat-item:last-child  { border-right: none; }
+
+  .stat-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .stat-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  /* Heartbeat bar */
+  .heartbeat {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 32px;
+  }
+
+  .hb-bar {
+    flex: 1;
+    border-radius: 2px;
+    transition: background 0.3s;
+    min-height: 3px;
+  }
+
+  /* Sparkline chart */
+  .chart-container {
+    position: relative;
+    height: 52px;
+  }
+
+  /* Response time tag */
+  .rt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .rt-tag {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: var(--text);
+  }
+
+  .rt-tag .dot { width: 5px; height: 5px; border-radius: 50%; }
+
+  /* ── INCIDENT LOG ── */
+  .incident-section {
+    margin-top: 2rem;
+  }
+
+  .incident-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+
+  .incident-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    transition: background 0.15s;
+  }
+
+  .incident-item:last-child { border-bottom: none; }
+  .incident-item:hover { background: var(--surface-hover); }
+
+  .incident-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .incident-msg { flex: 1; color: var(--text); }
+  .incident-service { color: var(--muted); font-size: 0.75rem; }
+  .incident-time { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+
+  /* ── TOAST ── */
+  .toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: rgba(15,20,35,0.95);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    color: var(--text);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    pointer-events: auto;
+    max-width: 300px;
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+
+  @keyframes slideOut {
+    from { transform: translateX(0);    opacity: 1; }
+    to   { transform: translateX(120%); opacity: 0; }
+  }
+
+  .toast.out { animation: slideOut 0.3s ease forwards; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    PulseWatch <span>/ Status</span>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">
+      <span class="live-dot"></span>
+      Live
+    </div>
+    <div class="header-time" id="headerTime"></div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid" id="summaryGrid">
+    <div class="summary-card">
+      <div class="summary-label">Operational</div>
+      <div class="summary-value val-green" id="sumUp">—</div>
+      <div class="summary-sub" id="sumUpPct">— of all monitors</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Incidents</div>
+      <div class="summary-value val-red" id="sumDown">—</div>
+      <div class="summary-sub" id="sumDownSub">Active outages</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Degraded</div>
+      <div class="summary-value val-yellow" id="sumDeg">—</div>
+      <div class="summary-sub">Elevated response times</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Avg Response</div>
+      <div class="summary-value val-white" id="sumAvgRt">—</div>
+      <div class="summary-sub">Across all monitors</div>
+    </div>
+  </div>
+
+  <!-- Section header -->
+  <div class="section-header">
+    <div class="section-title">Monitors</div>
+    <div class="sort-controls">
+      <button class="sort-btn active" onclick="setSort('status')">Status</button>
+      <button class="sort-btn" onclick="setSort('name')">Name</button>
+      <button class="sort-btn" onclick="setSort('rt')">Response</button>
+    </div>
+  </div>
+
+  <!-- Monitor Cards Grid -->
+  <div class="monitors-grid" id="monitorsGrid"></div>
+
+  <!-- Incident Log -->
+  <div class="incident-section">
+    <div class="section-header" style="margin-top:2rem">
+      <div class="section-title">Recent Incidents</div>
+    </div>
+    <div class="incident-list" id="incidentList"></div>
+  </div>
+
+</main>
+
+<footer>PulseWatch · Refreshes every 15 s · All times UTC</footer>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+
+let SERVICES    = [];
+const state     = {};
+const prevStat  = {};
+const incidents = [];
+const charts    = {};
+let sortMode    = 'status';
+let initialized = false;
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+function colHex(s) {
+  return s === 'up' ? '#22d3a0' : s === 'degraded' ? '#f59e0b' : '#f43f5e';
+}
+
+function colVar(s) {
+  return s === 'up' ? 'var(--green)' : s === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+}
+
+function uptimePct(history) {
+  if (!history.length) return null;
+  const up = history.filter(h => h.status === 'up').length;
+  return ((up / history.length) * 100).toFixed(2);
+}
+
+function maxRt(history) {
+  const rts = history.map(h => h.rt || 0);
+  return Math.max(...rts, 1);
+}
+
+function timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+
+function renderCard(d) {
+  const pct    = uptimePct(d.history);
+  const pctNum = parseFloat(pct) || 0;
+  const radius = 14;
+  const circ   = 2 * Math.PI * radius;
+  const dash   = circ * (pctNum / 100);
+  const hex    = colHex(d.status);
+  const rtMax  = maxRt(d.history);
+  const isPending = d.status === 'pending';
+  const cardStatus = isPending ? '' : d.status;
+  const dotStatus  = isPending ? 'up' : d.status;
+
+  const hbBars = d.history.slice(-30).map(h => {
+    const ht = h.rt ? Math.max(4, Math.round((h.rt / (rtMax * 1.2)) * 32)) : 3;
+    const c  = h.status === 'up' ? 'var(--green)' : h.status === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="hb-bar" style="height:${ht}px;background:${c};opacity:${h.status === 'up' ? '0.5' : '0.9'}"></div>`;
+  }).join('');
+
+  const rtDisplay = d.rt != null ? `${d.rt} ms` : '—';
+  const pctDisplay = pct != null ? `${pct}%` : '—';
+
+  return `
+  <div class="monitor-card ${cardStatus}" id="card-${d.id}">
+    <div class="card-top">
+      <div class="card-left">
+        <div class="status-ring">
+          <svg viewBox="0 0 34 34">
+            <circle class="track" cx="17" cy="17" r="${radius}" />
+            <circle class="progress" cx="17" cy="17" r="${radius}"
+              stroke="${hex}"
+              stroke-dasharray="${circ}"
+              stroke-dashoffset="${circ - dash}"
+            />
+          </svg>
+          <div class="status-dot ${dotStatus}"></div>
+        </div>
+        <div class="card-name">
+          <h3>${d.name}</h3>
+          <div class="card-url">${d.url}</div>
+        </div>
+      </div>
+      <div class="status-badge badge-${isPending ? 'up' : d.status}">${isPending ? 'checking' : d.status}</div>
+    </div>
+
+    <div class="card-stats">
+      <div class="stat-item">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value" style="color:${hex}">${pctDisplay}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Response</div>
+        <div class="stat-value">${rtDisplay}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Type</div>
+        <div class="stat-value">${d.type}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Checks</div>
+        <div class="stat-value">${d.history.length}</div>
+      </div>
+    </div>
+
+    <div class="rt-row">
+      <span>Response time (${d.history.length} checks)</span>
+      <div class="rt-tag">
+        <div class="dot" style="background:${hex}"></div>
+        ${rtDisplay} now
+      </div>
+    </div>
+    <div class="chart-container">
+      <canvas id="chart-${d.id}"></canvas>
+    </div>
+
+    <div>
+      <div class="stat-label" style="margin-bottom:5px;font-size:0.65rem;">HEARTBEAT — LAST 30 CHECKS</div>
+      <div class="heartbeat">${hbBars}</div>
+    </div>
+  </div>`;
+}
+
+function buildCharts() {
+  for (const d of Object.values(state)) {
+    const canvas = document.getElementById(`chart-${d.id}`);
+    if (!canvas) continue;
+    const data = d.history.map(h => h.rt || 0);
+    const hex  = colHex(d.status);
+    const ctx  = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 52);
+    const alpha = d.status === 'up' ? 'rgba(34,211,160,0.25)' : d.status === 'degraded' ? 'rgba(245,158,11,0.25)' : 'rgba(244,63,94,0.25)';
+    grad.addColorStop(0, alpha);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    if (charts[d.id]) charts[d.id].destroy();
+    charts[d.id] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map((_, i) => i + 1),
+        datasets: [{ data, borderColor: hex, borderWidth: 1.5, pointRadius: 0, tension: 0.35, fill: true, backgroundColor: grad }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, suggestedMin: 0 } },
+        elements: { line: { borderCapStyle: 'round' } }
+      }
+    });
+  }
+}
+
+function renderSummary() {
+  const all  = Object.values(state);
+  const live = all.filter(v => v.status !== 'pending');
+  const up   = live.filter(v => v.status === 'up').length;
+  const down = live.filter(v => v.status === 'down').length;
+  const deg  = live.filter(v => v.status === 'degraded').length;
+  const rts  = live.filter(v => v.rt).map(v => v.rt);
+  const avg  = rts.length ? Math.round(rts.reduce((s, r) => s + r, 0) / rts.length) : null;
+
+  document.getElementById('sumUp').textContent    = up;
+  document.getElementById('sumUpPct').textContent = all.length ? `${((up / all.length) * 100).toFixed(0)}% of all monitors` : '—';
+  document.getElementById('sumDown').textContent  = down;
+  document.getElementById('sumDeg').textContent   = deg;
+  document.getElementById('sumAvgRt').textContent = avg != null ? avg + ' ms' : '—';
+}
+
+function sortedServices() {
+  const order = { down: 0, degraded: 1, pending: 2, up: 3 };
+  return [...SERVICES].sort((a, b) => {
+    if (sortMode === 'status') return (order[state[a.id]?.status] ?? 9) - (order[state[b.id]?.status] ?? 9);
+    if (sortMode === 'name')   return a.name.localeCompare(b.name);
+    if (sortMode === 'rt')     return (state[a.id]?.rt ?? Infinity) - (state[b.id]?.rt ?? Infinity);
+    return 0;
+  });
+}
+
+function renderAll() {
+  const sorted = sortedServices();
+  document.getElementById('monitorsGrid').innerHTML = sorted.map(s => renderCard(state[s.id])).join('');
+  buildCharts();
+  renderSummary();
+  renderIncidents();
+}
+
+function updateCards() {
+  sortedServices().forEach(svc => {
+    const d    = state[svc.id];
+    const card = document.getElementById(`card-${d.id}`);
+    if (!card) return;
+
+    const pct     = uptimePct(d.history);
+    const pctNum  = parseFloat(pct) || 0;
+    const hex     = colHex(d.status);
+    const radius  = 14;
+    const circ    = 2 * Math.PI * radius;
+    const rtMax   = maxRt(d.history);
+    const isPend  = d.status === 'pending';
+
+    card.className = `monitor-card ${isPend ? '' : d.status}`;
+    const badge = card.querySelector('.status-badge');
+    badge.className = `status-badge badge-${isPend ? 'up' : d.status}`;
+    badge.textContent = isPend ? 'checking' : d.status;
+    card.querySelector('.status-dot').className = `status-dot ${isPend ? 'up' : d.status}`;
+
+    const prog = card.querySelector('circle.progress');
+    prog.setAttribute('stroke', hex);
+    prog.setAttribute('stroke-dashoffset', circ - circ * (pctNum / 100));
+
+    const sv = card.querySelectorAll('.stat-value');
+    sv[0].textContent = pct != null ? pct + '%' : '—';
+    sv[0].style.color = hex;
+    sv[1].textContent = d.rt != null ? `${d.rt} ms` : '—';
+    sv[3].textContent = d.history.length;
+
+    const rtTag = card.querySelector('.rt-tag');
+    if (rtTag) {
+      rtTag.querySelector('.dot').style.background = hex;
+      rtTag.lastChild.textContent = ` ${d.rt != null ? d.rt + ' ms' : '—'} now`;
+    }
+    const rtSpan = card.querySelector('.rt-row span');
+    if (rtSpan) rtSpan.textContent = `Response time (${d.history.length} checks)`;
+
+    const bars = card.querySelectorAll('.hb-bar');
+    d.history.slice(-30).forEach((h, i) => {
+      if (!bars[i]) return;
+      bars[i].style.height     = (h.rt ? Math.max(4, Math.round((h.rt / (rtMax * 1.2)) * 32)) : 3) + 'px';
+      bars[i].style.background = h.status === 'up' ? 'var(--green)' : h.status === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+      bars[i].style.opacity    = h.status === 'up' ? '0.5' : '0.9';
+    });
+
+    const ch = charts[d.id];
+    if (ch) {
+      ch.data.datasets[0].data        = d.history.map(h => h.rt || 0);
+      ch.data.datasets[0].borderColor = hex;
+      ch.update('none');
+    }
+  });
+}
+
+// ─── INCIDENTS ────────────────────────────────────────────────────────────────
+
+function addIncident(svc, newStatus) {
+  const msgs = {
+    down:     `${svc.name} is unreachable`,
+    degraded: `${svc.name} response time elevated (${svc.rt} ms)`,
+    up:       `${svc.name} recovered and is operational`,
+  };
+  incidents.unshift({ status: newStatus, msg: msgs[newStatus] || `${svc.name} → ${newStatus}`, time: new Date() });
+  if (incidents.length > 20) incidents.pop();
+}
+
+function renderIncidents() {
+  const list = document.getElementById('incidentList');
+  if (!incidents.length) {
+    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No incidents yet.</span></div>`;
+    return;
+  }
+  list.innerHTML = incidents.slice(0, 8).map(inc => {
+    const col = inc.status === 'up' ? 'var(--green)' : inc.status === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="incident-item">
+      <div class="incident-dot" style="background:${col}"></div>
+      <div class="incident-msg">${inc.msg}</div>
+      <div class="incident-time">${timeAgo(inc.time)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── FETCH ────────────────────────────────────────────────────────────────────
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) throw new Error(res.status);
+    const { services } = await res.json();
+
+    const changed = [];
+    for (const svc of services) {
+      const old = prevStat[svc.id];
+      if (old && old !== 'pending' && old !== svc.status) changed.push({ svc, newStatus: svc.status });
+      prevStat[svc.id] = svc.status;
+      state[svc.id]    = svc;
+    }
+    SERVICES = services.map(s => ({ id: s.id, name: s.name, url: s.url, type: s.type }));
+
+    if (!initialized || !document.getElementById('monitorsGrid').children.length) {
+      renderAll();
+      initialized = true;
+    } else {
+      updateCards();
+      renderSummary();
+    }
+
+    for (const { svc, newStatus } of changed) {
+      addIncident(svc, newStatus);
+      showToast(svc.name, newStatus);
+    }
+    if (changed.length) renderIncidents();
+
+  } catch (e) {
+    console.warn('PulseWatch: /api/status unreachable —', e.message);
+  }
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+
+function showToast(name, status) {
+  const icons = { up: '✅', down: '🔴', degraded: '⚠️' };
+  const msgs  = { up: 'recovered', down: 'is DOWN', degraded: 'is degraded' };
+  const el    = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span>${icons[status] || '?'}</span> <strong style="color:${colVar(status)}">${name}</strong>&nbsp;${msgs[status] || status}`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 3500);
+}
+
+// ─── SORT ─────────────────────────────────────────────────────────────────────
+
+function setSort(mode) {
+  sortMode = mode;
+  document.querySelectorAll('.sort-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.toLowerCase() === mode || (mode === 'rt' && b.textContent === 'Response'))
+  );
+  renderAll();
+}
+
+// ─── CLOCK ────────────────────────────────────────────────────────────────────
+
+function updateClock() {
+  const el = document.getElementById('headerTime');
+  if (el) el.textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+
+fetchStatus();
+updateClock();
+setInterval(fetchStatus, 15000);
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>

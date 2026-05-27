@@ -3,6 +3,7 @@
 const http   = require('http');
 const https  = require('https');
 const net    = require('net');
+const tls    = require('tls');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
@@ -21,10 +22,13 @@ function saveConfig(cfg) {
 }
 
 let config = loadConfig();
-const PORT          = process.env.PORT || config.port || 3000;
-const HISTORY_SIZE  = 60;
-const DEFAULT_TIMEOUT = 5000;
-const SESSION_TTL   = 24 * 60 * 60 * 1000; // 24 hours
+const PORT             = process.env.PORT || config.port || 3000;
+const HISTORY_SIZE     = 60;
+const DEFAULT_TIMEOUT  = 5000;
+const SESSION_TTL      = 24 * 60 * 60 * 1000; // 24 hours
+const SSL_INTERVAL     = 6 * 60 * 60 * 1000;  // 6 hours
+const SSL_WARNING_DAYS = config.sslWarningDays  ?? 30;
+const SSL_CRITICAL_DAYS= config.sslCriticalDays ?? 7;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -110,6 +114,10 @@ function ensureCredentials() {
 
 // ── Monitoring state ──────────────────────────────────────────────────────────
 
+function isHTTPS(svc) {
+  return svc.type !== 'TCP' && svc.url.startsWith('https://');
+}
+
 const state = {};
 for (const svc of config.services) {
   state[svc.id] = {
@@ -121,7 +129,66 @@ for (const svc of config.services) {
     rt:        null,
     history:   [],
     lastCheck: null,
+    ssl: isHTTPS(svc)
+      ? { status: 'pending', daysLeft: null, expiry: null }
+      : null,
   };
+}
+
+// ── SSL checker ───────────────────────────────────────────────────────────────
+
+function checkSSL(hostname, port = 443) {
+  return new Promise((resolve) => {
+    const timeout = DEFAULT_TIMEOUT;
+    const socket  = tls.connect(
+      { host: hostname, port, servername: hostname, rejectUnauthorized: false },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.destroy();
+        if (!cert || !cert.valid_to) {
+          return resolve({ status: 'error', daysLeft: null, expiry: null });
+        }
+        const expiry    = new Date(cert.valid_to);
+        const daysLeft  = Math.floor((expiry - Date.now()) / 86_400_000);
+        let   sslStatus = 'ok';
+        if      (daysLeft <  0)                sslStatus = 'expired';
+        else if (daysLeft <  SSL_CRITICAL_DAYS) sslStatus = 'critical';
+        else if (daysLeft <  SSL_WARNING_DAYS)  sslStatus = 'warning';
+        resolve({ status: sslStatus, daysLeft, expiry: expiry.toISOString() });
+      }
+    );
+    socket.setTimeout(timeout, () => {
+      socket.destroy();
+      resolve({ status: 'error', daysLeft: null, expiry: null });
+    });
+    socket.on('error', () => resolve({ status: 'error', daysLeft: null, expiry: null }));
+  });
+}
+
+async function runSSLCheck(svc) {
+  if (!isHTTPS(svc) || svc.sslCheck === false) return;
+
+  let parsed;
+  try { parsed = new URL(svc.url); } catch { return; }
+
+  const prev   = state[svc.id].ssl?.status;
+  const result = await checkSSL(parsed.hostname, parseInt(parsed.port) || 443);
+  state[svc.id].ssl = result;
+
+  const icon = result.status === 'ok' ? '🔒' : result.status === 'warning' ? '⚠️ ' : '🔴';
+  const days = result.daysLeft != null ? `${result.daysLeft}d` : 'err';
+  console.log(`[SSL] ${icon} ${svc.name.padEnd(20)} ${result.status.padEnd(8)} ${days}`);
+
+  // Alert on status change to warning/critical/expired
+  if (prev && prev !== result.status && result.status !== 'ok' && result.status !== 'pending') {
+    const msgs = {
+      warning:  `SSL cert for ${svc.name} expires in ${result.daysLeft} days`,
+      critical: `SSL cert for ${svc.name} expires in ${result.daysLeft} days — renew immediately`,
+      expired:  `SSL cert for ${svc.name} has EXPIRED`,
+      error:    `SSL check failed for ${svc.name}`,
+    };
+    console.warn(`[SSL ALERT] ${msgs[result.status]}`);
+  }
 }
 
 // ── Checkers ──────────────────────────────────────────────────────────────────
@@ -204,10 +271,20 @@ async function runCheck(svc) {
 function startMonitoring() {
   config.services.forEach((svc, i) => {
     const interval = (svc.interval || config.interval || 30) * 1000;
+
+    // Health checks — staggered start
     setTimeout(() => {
       runCheck(svc);
       setInterval(() => runCheck(svc), interval);
     }, i * 600);
+
+    // SSL checks — staggered start, then every 6 hours
+    if (isHTTPS(svc) && svc.sslCheck !== false) {
+      setTimeout(() => {
+        runSSLCheck(svc);
+        setInterval(() => runSSLCheck(svc), SSL_INTERVAL);
+      }, 3000 + i * 1000); // wait 3s after startup so health checks go first
+    }
   });
 }
 

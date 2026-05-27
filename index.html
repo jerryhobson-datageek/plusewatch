@@ -548,6 +548,55 @@
     z-index: 1;
   }
 
+  /* ── SSL BADGE ── */
+  .ssl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    gap: 8px;
+  }
+
+  .ssl-row.ok       { background: rgba(34,211,160,0.06);  border-color: rgba(34,211,160,0.15); }
+  .ssl-row.warning  { background: rgba(245,158,11,0.08);  border-color: rgba(245,158,11,0.2);  }
+  .ssl-row.critical { background: rgba(244,63,94,0.08);   border-color: rgba(244,63,94,0.2);   }
+  .ssl-row.expired  { background: rgba(244,63,94,0.12);   border-color: rgba(244,63,94,0.3);   }
+  .ssl-row.error    { background: rgba(100,116,139,0.08); border-color: rgba(100,116,139,0.15);}
+  .ssl-row.pending  { background: rgba(100,116,139,0.06); border-color: rgba(100,116,139,0.12);}
+
+  .ssl-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+  }
+
+  .ssl-icon { font-size: 0.8rem; }
+
+  .ssl-label { font-weight: 500; }
+
+  .ssl-days {
+    font-weight: 700;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .ssl-days.ok       { color: var(--green); }
+  .ssl-days.warning  { color: var(--yellow); }
+  .ssl-days.critical { color: var(--red); }
+  .ssl-days.expired  { color: var(--red); }
+  .ssl-days.error    { color: var(--muted); }
+  .ssl-days.pending  { color: var(--muted); }
+
+  .ssl-expiry {
+    font-size: 0.68rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
   /* ── LOGIN OVERLAY ── */
   .login-overlay {
     position: fixed;
@@ -1301,7 +1350,33 @@ function renderCard(d) {
       <div class="stat-label" style="margin-bottom:5px;font-size:0.65rem;">HEARTBEAT — LAST 30 CHECKS</div>
       <div class="heartbeat">${hbBars}</div>
     </div>
+
+    ${sslBadgeHTML(d.ssl)}
   </div>`;
+}
+
+function sslBadgeHTML(ssl) {
+  if (!ssl) return ''; // TCP or plain HTTP — no badge
+  const s       = ssl.status || 'pending';
+  const icons   = { ok:'🔒', warning:'⚠️', critical:'🔴', expired:'🔴', error:'⚪', pending:'⚪' };
+  const labels  = { ok:'SSL Valid', warning:'SSL Expiring Soon', critical:'SSL Expiring Soon', expired:'SSL Expired', error:'SSL Check Failed', pending:'SSL Checking…' };
+  const daysStr = ssl.daysLeft != null
+    ? (ssl.daysLeft < 0 ? 'Expired' : `${ssl.daysLeft} days left`)
+    : '—';
+  const expiryStr = ssl.expiry
+    ? new Date(ssl.expiry).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+    : '';
+  return `
+    <div class="ssl-row ${s}" id="ssl-row-pending">
+      <div class="ssl-left">
+        <span class="ssl-icon">${icons[s]}</span>
+        <span class="ssl-label" style="color:var(--muted)">${labels[s]}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${expiryStr ? `<span class="ssl-expiry">exp ${expiryStr}</span>` : ''}
+        <span class="ssl-days ${s}">${daysStr}</span>
+      </div>
+    </div>`;
 }
 
 function buildCharts() {
@@ -1418,6 +1493,15 @@ function updateCards() {
       ch.data.datasets[0].borderColor = hex;
       ch.update('none');
     }
+
+    // Update SSL badge
+    const sslRow = card.querySelector('.ssl-row');
+    if (sslRow && d.ssl) {
+      const newBadge = document.createElement('div');
+      newBadge.innerHTML = sslBadgeHTML(d.ssl);
+      const replacement = newBadge.firstElementChild;
+      if (replacement) sslRow.replaceWith(replacement);
+    }
   });
 }
 
@@ -1458,12 +1542,24 @@ async function fetchStatus() {
     if (!res.ok) throw new Error(res.status);
     const { services } = await res.json();
 
-    const changed = [];
+    const changed    = [];
+    const sslChanged = [];
+
     for (const svc of services) {
+      // Uptime status changes
       const old = prevStat[svc.id];
       if (old && old !== 'pending' && old !== svc.status) changed.push({ svc, newStatus: svc.status });
       prevStat[svc.id] = svc.status;
-      state[svc.id]    = svc;
+
+      // SSL status changes
+      const prevSSL = state[svc.id]?.ssl?.status;
+      const newSSL  = svc.ssl?.status;
+      if (prevSSL && prevSSL !== 'pending' && newSSL && prevSSL !== newSSL
+          && newSSL !== 'ok' && newSSL !== 'error') {
+        sslChanged.push({ svc, sslStatus: newSSL });
+      }
+
+      state[svc.id] = svc;
     }
     SERVICES = services.map(s => ({ id: s.id, name: s.name, url: s.url, type: s.type }));
 
@@ -1479,7 +1575,18 @@ async function fetchStatus() {
       addIncident(svc, newStatus);
       showToast(svc.name, newStatus);
     }
-    if (changed.length) renderIncidents();
+
+    for (const { svc, sslStatus } of sslChanged) {
+      const days = svc.ssl?.daysLeft;
+      const msgs = {
+        warning:  `SSL cert for ${svc.name} expires in ${days} days`,
+        critical: `SSL cert for ${svc.name} expires in ${days} days — renew now!`,
+        expired:  `SSL cert for ${svc.name} has EXPIRED`,
+      };
+      showSSLToast(svc.name, sslStatus, msgs[sslStatus]);
+    }
+
+    if (changed.length || sslChanged.length) renderIncidents();
 
   } catch (e) {
     console.warn('PulseWatch: /api/status unreachable —', e.message);
@@ -1496,6 +1603,16 @@ function showToast(name, status) {
   el.innerHTML = `<span>${icons[status] || '?'}</span> <strong style="color:${colVar(status)}">${name}</strong>&nbsp;${msgs[status] || status}`;
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 3500);
+}
+
+function showSSLToast(name, sslStatus, message) {
+  const colors = { warning: 'var(--yellow)', critical: 'var(--red)', expired: 'var(--red)' };
+  const icons  = { warning: '⚠️', critical: '🔴', expired: '🔴' };
+  const el     = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span>${icons[sslStatus] || '🔒'}</span> <strong style="color:${colors[sslStatus] || 'var(--muted)'}">${message}</strong>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 5000);
 }
 
 // ─── SORT ─────────────────────────────────────────────────────────────────────

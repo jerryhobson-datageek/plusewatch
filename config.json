@@ -1,6 +1,8 @@
 {
   "port": 3000,
   "interval": 30,
+  "sslWarningDays": 30,
+  "sslCriticalDays": 7,
   "services": [
     {
       "id": 1,

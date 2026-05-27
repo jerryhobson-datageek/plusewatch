@@ -548,6 +548,146 @@
     z-index: 1;
   }
 
+  /* ── MAINTENANCE BANNER ── */
+  .maint-banner {
+    position: sticky;
+    top: 64px;
+    z-index: 50;
+    display: none;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .maint-banner.visible { display: flex; }
+
+  .maint-banner-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 10px 2rem;
+    background: rgba(99,102,241,0.12);
+    border-bottom: 1px solid rgba(99,102,241,0.25);
+    font-size: 0.8rem;
+    color: #a5b4fc;
+    backdrop-filter: blur(12px);
+  }
+
+  .maint-banner-left { display: flex; align-items: center; gap: 8px; }
+  .maint-banner-name { font-weight: 600; color: #c7d2fe; }
+  .maint-banner-countdown { color: #818cf8; font-size: 0.75rem; white-space: nowrap; }
+
+  /* ── MAINTENANCE STATUS ── */
+  .status-dot.maintenance {
+    background: var(--muted);
+    box-shadow: none;
+  }
+
+  .badge-maintenance {
+    background: rgba(100,116,139,0.15);
+    color: var(--muted);
+    border: 1px solid rgba(100,116,139,0.25);
+  }
+
+  .maint-active-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    background: rgba(99,102,241,0.07);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 8px;
+    font-size: 0.72rem;
+    color: #a5b4fc;
+  }
+
+  /* ── MAINTENANCE SCHEDULE SECTION ── */
+  .maint-section { margin-top: 2rem; }
+
+  .maint-windows {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+
+  .maint-window-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .maint-window-item:last-child { border-bottom: none; }
+  .maint-window-item:hover { background: var(--surface-hover); }
+
+  .maint-win-title { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+  .maint-win-meta  { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  .maint-win-status {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  .maint-status-active   { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.25); }
+  .maint-status-upcoming { background: rgba(100,116,139,0.12); color: var(--muted); border: 1px solid rgba(100,116,139,0.2); }
+  .maint-status-past     { background: rgba(34,211,160,0.08); color: var(--green); border: 1px solid rgba(34,211,160,0.15); }
+
+  .maint-delete-btn {
+    background: none;
+    border: 1px solid rgba(244,63,94,0.25);
+    border-radius: 6px;
+    color: var(--red);
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .maint-delete-btn:hover { background: rgba(244,63,94,0.1); }
+
+  .add-maint-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.78rem;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .add-maint-btn:hover { background: var(--surface-hover); border-color: var(--accent); color: #a5b4fc; }
+
+  /* wrench on cards (admin only) */
+  .card-maint-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8rem;
+    opacity: 0.4;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: opacity 0.15s;
+    line-height: 1;
+  }
+
+  .card-maint-btn:hover { opacity: 1; background: var(--surface-hover); }
+
   /* ── SSL BADGE ── */
   .ssl-row {
     display: flex;
@@ -970,6 +1110,47 @@
   </div>
 </div>
 
+<!-- SCHEDULE MAINTENANCE MODAL -->
+<div class="modal-overlay" id="maintModal">
+  <div class="modal" style="max-width:440px">
+    <h2>🔧 Schedule Maintenance</h2>
+    <div class="login-field">
+      <label>Service</label>
+      <select id="maintService" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:0.9rem;outline:none;width:100%;font-family:inherit">
+      </select>
+    </div>
+    <div class="login-field">
+      <label>Title</label>
+      <input type="text" id="maintTitle" placeholder="e.g. SSL Certificate Renewal" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+      <div class="login-field">
+        <label>Start</label>
+        <input type="datetime-local" id="maintStart" />
+      </div>
+      <div class="login-field">
+        <label>Duration</label>
+        <select id="maintDuration" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:0.9rem;outline:none;width:100%;font-family:inherit">
+          <option value="30">30 minutes</option>
+          <option value="60" selected>1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="240">4 hours</option>
+          <option value="480">8 hours</option>
+        </select>
+      </div>
+    </div>
+    <div class="login-field">
+      <label>Description (optional)</label>
+      <input type="text" id="maintDesc" placeholder="Additional details..." />
+    </div>
+    <div class="modal-msg" id="maintMsg"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeMaintModal()">Cancel</button>
+      <button class="btn-primary" id="maintSaveBtn" onclick="doScheduleMaintenance()">Schedule</button>
+    </div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <header>
   <div class="logo">
@@ -994,6 +1175,9 @@
     </div>
   </div>
 </header>
+
+<!-- MAINTENANCE BANNER (active windows — all users) -->
+<div class="maint-banner" id="maintBanner"></div>
 
 <!-- MAIN -->
 <main>
@@ -1034,6 +1218,15 @@
 
   <!-- Monitor Cards Grid -->
   <div class="monitors-grid" id="monitorsGrid"></div>
+
+  <!-- Maintenance Schedule (admin only) -->
+  <div class="maint-section" id="maintSection" style="display:none">
+    <div class="section-header">
+      <div class="section-title">Maintenance Windows</div>
+      <button class="add-maint-btn" onclick="openMaintModal()">＋ Schedule</button>
+    </div>
+    <div class="maint-windows" id="maintWindowsList"></div>
+  </div>
 
   <!-- Incident Log -->
   <div class="incident-section">
@@ -1110,6 +1303,7 @@ async function doLogin() {
     setUserBadge(currentUser);
     hideLogin();
     fetchStatus();
+    fetchMaintenance();
   } catch {
     showLoginError('Could not reach server.');
   } finally {
@@ -1137,6 +1331,7 @@ async function checkAuth() {
     setUserBadge(currentUser);
     hideLogin();
     fetchStatus();
+    fetchMaintenance();
   } catch {
     showLogin();
   }
@@ -1245,11 +1440,17 @@ let initialized = false;
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function colHex(s) {
-  return s === 'up' ? '#22d3a0' : s === 'degraded' ? '#f59e0b' : '#f43f5e';
+  if (s === 'up')          return '#22d3a0';
+  if (s === 'degraded')    return '#f59e0b';
+  if (s === 'maintenance') return '#64748b';
+  return '#f43f5e';
 }
 
 function colVar(s) {
-  return s === 'up' ? 'var(--green)' : s === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+  if (s === 'up')          return 'var(--green)';
+  if (s === 'degraded')    return 'var(--yellow)';
+  if (s === 'maintenance') return 'var(--muted)';
+  return 'var(--red)';
 }
 
 function uptimePct(history) {
@@ -1313,7 +1514,10 @@ function renderCard(d) {
           <div class="card-url">${d.url}</div>
         </div>
       </div>
-      <div class="status-badge badge-${isPending ? 'up' : d.status}">${isPending ? 'checking' : d.status}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="status-badge badge-${isPending ? 'up' : d.status}">${isPending ? 'checking' : d.status}</div>
+        ${currentUser?.role === 'admin' ? `<button class="card-maint-btn" title="Schedule Maintenance" onclick="openMaintModal(${d.id});event.stopPropagation()">🔧</button>` : ''}
+      </div>
     </div>
 
     <div class="card-stats">
@@ -1351,7 +1555,17 @@ function renderCard(d) {
       <div class="heartbeat">${hbBars}</div>
     </div>
 
+    ${maintRowHTML(d.maintenance)}
     ${sslBadgeHTML(d.ssl)}
+  </div>`;
+}
+
+function maintRowHTML(maint) {
+  if (!maint || !maint.active) return '';
+  const endsIn = fmtCountdown(new Date(maint.end));
+  return `<div class="maint-active-row">
+    <span>🔧</span>
+    <span style="flex:1"><strong>${maint.title}</strong> — ends in ${endsIn}</span>
   </div>`;
 }
 
@@ -1615,6 +1829,166 @@ function showSSLToast(name, sslStatus, message) {
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 5000);
 }
 
+// ─── MAINTENANCE ─────────────────────────────────────────────────────────────
+
+let maintWindows    = [];
+let maintTargetSvc  = null; // pre-selected service when opening from card button
+
+function fmtCountdown(end) {
+  const diff = Math.max(0, end - Date.now());
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function fmtDateTime(iso) {
+  return new Date(iso).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function maintWindowStatus(w) {
+  const now = Date.now();
+  const s   = new Date(w.start).getTime();
+  const e   = new Date(w.end).getTime();
+  if (now >= s && now <= e) return 'active';
+  if (now < s)              return 'upcoming';
+  return 'past';
+}
+
+async function fetchMaintenance() {
+  try {
+    const res  = await fetch('/api/maintenance', { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    maintWindows = data.windows || [];
+    renderMaintBanner();
+    renderMaintSection();
+  } catch {}
+}
+
+function renderMaintBanner() {
+  const banner = document.getElementById('maintBanner');
+  const now    = Date.now();
+  const active = maintWindows.filter(w =>
+    new Date(w.start).getTime() <= now && new Date(w.end).getTime() >= now
+  );
+  if (!active.length) { banner.classList.remove('visible'); banner.innerHTML = ''; return; }
+  banner.classList.add('visible');
+  banner.innerHTML = active.map(w => `
+    <div class="maint-banner-item">
+      <div class="maint-banner-left">
+        <span>🔧</span>
+        <span>Scheduled Maintenance:</span>
+        <span class="maint-banner-name">${w.serviceName}</span>
+        <span>—</span>
+        <span>${w.title}</span>
+      </div>
+      <span class="maint-banner-countdown">Ends in ${fmtCountdown(new Date(w.end))}</span>
+    </div>`).join('');
+}
+
+function renderMaintSection() {
+  if (currentUser?.role !== 'admin') return;
+  const section = document.getElementById('maintSection');
+  const list    = document.getElementById('maintWindowsList');
+  section.style.display = 'block';
+
+  if (!maintWindows.length) {
+    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No maintenance windows scheduled.</span></div>`;
+    return;
+  }
+
+  const sorted = [...maintWindows].sort((a, b) => new Date(a.start) - new Date(b.start));
+  list.innerHTML = sorted.map(w => {
+    const st = maintWindowStatus(w);
+    const statusLabels = { active: 'Active', upcoming: 'Upcoming', past: 'Completed' };
+    return `
+    <div class="maint-window-item">
+      <div>
+        <div class="maint-win-title">${w.serviceName} — ${w.title}</div>
+        <div class="maint-win-meta">${fmtDateTime(w.start)} → ${fmtDateTime(w.end)}${w.description ? ' · ' + w.description : ''} · by ${w.createdBy}</div>
+      </div>
+      <span class="maint-win-status maint-status-${st}">${statusLabels[st]}</span>
+      ${st !== 'past' ? `<button class="maint-delete-btn" onclick="deleteMaintWindow('${w.id}')">Delete</button>` : '<span></span>'}
+    </div>`;
+  }).join('');
+}
+
+async function deleteMaintWindow(id) {
+  if (!confirm('Delete this maintenance window?')) return;
+  try {
+    const res = await fetch(`/api/maintenance/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (res.ok) { await fetchMaintenance(); renderAll(); }
+  } catch {}
+}
+
+function openMaintModal(serviceId = null) {
+  maintTargetSvc = serviceId;
+
+  // Populate service dropdown
+  const sel = document.getElementById('maintService');
+  sel.innerHTML = SERVICES.map(s =>
+    `<option value="${s.id}" ${s.id === serviceId ? 'selected' : ''}>${s.name}</option>`
+  ).join('');
+
+  // Default start = now rounded up to next 30 min
+  const now   = new Date();
+  const mins  = Math.ceil(now.getMinutes() / 30) * 30;
+  now.setMinutes(mins, 0, 0);
+  document.getElementById('maintStart').value = now.toISOString().slice(0,16);
+  document.getElementById('maintTitle').value = '';
+  document.getElementById('maintDesc').value  = '';
+  const msg = document.getElementById('maintMsg');
+  msg.className = 'modal-msg'; msg.textContent = '';
+
+  document.getElementById('maintModal').classList.add('open');
+}
+
+function closeMaintModal() {
+  document.getElementById('maintModal').classList.remove('open');
+}
+
+async function doScheduleMaintenance() {
+  const serviceId = document.getElementById('maintService').value;
+  const title     = document.getElementById('maintTitle').value.trim();
+  const start     = document.getElementById('maintStart').value;
+  const duration  = parseInt(document.getElementById('maintDuration').value);
+  const desc      = document.getElementById('maintDesc').value.trim();
+  const msg       = document.getElementById('maintMsg');
+  const btn       = document.getElementById('maintSaveBtn');
+
+  msg.className = 'modal-msg';
+  if (!title)  { msg.className = 'modal-msg error'; msg.textContent = 'Title is required.'; return; }
+  if (!start)  { msg.className = 'modal-msg error'; msg.textContent = 'Start time is required.'; return; }
+
+  const startDate = new Date(start);
+  const endDate   = new Date(startDate.getTime() + duration * 60000);
+
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/maintenance', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ serviceId: Number(serviceId), title, description: desc, start: startDate.toISOString(), end: endDate.toISOString() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.className = 'modal-msg error'; msg.textContent = data.error || 'Failed to schedule.';
+    } else {
+      closeMaintModal();
+      await fetchMaintenance();
+      renderAll();
+    }
+  } catch {
+    msg.className = 'modal-msg error'; msg.textContent = 'Could not reach server.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Refresh banner countdown every minute
+setInterval(() => { renderMaintBanner(); renderMaintSection(); }, 60000);
+
 // ─── SORT ─────────────────────────────────────────────────────────────────────
 
 function setSort(mode) {
@@ -1636,8 +2010,9 @@ function updateClock() {
 
 checkAuth();                          // validate token or show login screen
 updateClock();
-setInterval(fetchStatus, 15000);      // polling continues once logged in
-setInterval(updateClock, 1000);
+setInterval(fetchStatus,      15000); // uptime polling
+setInterval(fetchMaintenance, 60000); // maintenance polling every minute
+setInterval(updateClock,       1000);
 </script>
 </body>
 </html>

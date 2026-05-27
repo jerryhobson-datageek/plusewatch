@@ -56,6 +56,12 @@ else
   echo "      → config.json already exists — keeping your existing config."
 fi
 
+# Create maintenance.json if it doesn't exist
+if [ ! -f /opt/pulsewatch/maintenance.json ]; then
+  echo '{"windows":[]}' > /opt/pulsewatch/maintenance.json
+  echo "      → maintenance.json created."
+fi
+
 chown -R www-data:www-data /opt/pulsewatch 2>/dev/null || \
   chown -R nginx:nginx      /opt/pulsewatch 2>/dev/null || true
 

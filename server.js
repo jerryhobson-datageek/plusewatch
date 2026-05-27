@@ -11,7 +11,8 @@ const { URL } = require('url');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+const CONFIG_PATH      = path.join(__dirname, 'config.json');
+const MAINTENANCE_PATH = path.join(__dirname, 'maintenance.json');
 
 function loadConfig() {
   return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -29,6 +30,30 @@ const SESSION_TTL      = 24 * 60 * 60 * 1000; // 24 hours
 const SSL_INTERVAL     = 6 * 60 * 60 * 1000;  // 6 hours
 const SSL_WARNING_DAYS = config.sslWarningDays  ?? 30;
 const SSL_CRITICAL_DAYS= config.sslCriticalDays ?? 7;
+
+// ── Maintenance ───────────────────────────────────────────────────────────────
+
+function loadMaintenance() {
+  try { return JSON.parse(fs.readFileSync(MAINTENANCE_PATH, 'utf8')); }
+  catch { return { windows: [] }; }
+}
+
+function saveMaintenance(data) {
+  fs.writeFileSync(MAINTENANCE_PATH, JSON.stringify(data, null, 2));
+}
+
+function generateId() {
+  return crypto.randomBytes(8).toString('hex');
+}
+
+function getActiveWindow(serviceId) {
+  const now = Date.now();
+  return loadMaintenance().windows.find(w =>
+    w.serviceId === serviceId &&
+    new Date(w.start).getTime() <= now &&
+    new Date(w.end).getTime()   >= now
+  ) || null;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -121,14 +146,15 @@ function isHTTPS(svc) {
 const state = {};
 for (const svc of config.services) {
   state[svc.id] = {
-    id:        svc.id,
-    name:      svc.name,
-    url:       svc.url,
-    type:      svc.type || 'HTTP',
-    status:    'pending',
-    rt:        null,
-    history:   [],
-    lastCheck: null,
+    id:          svc.id,
+    name:        svc.name,
+    url:         svc.url,
+    type:        svc.type || 'HTTP',
+    status:      'pending',
+    rt:          null,
+    history:     [],
+    lastCheck:   null,
+    maintenance: null,
     ssl: isHTTPS(svc)
       ? { status: 'pending', daysLeft: null, expiry: null }
       : null,
@@ -257,15 +283,22 @@ async function runCheck(svc) {
     result.status = 'degraded';
   }
 
+  // Maintenance window overrides status and suppresses alerts
+  const activeWindow = getActiveWindow(svc.id);
+  if (activeWindow) result.status = 'maintenance';
+
   const d = state[svc.id];
-  d.status    = result.status;
-  d.rt        = result.rt;
-  d.lastCheck = new Date().toISOString();
+  d.status      = result.status;
+  d.rt          = result.status === 'maintenance' ? null : result.rt;
+  d.lastCheck   = new Date().toISOString();
+  d.maintenance = activeWindow
+    ? { active: true, id: activeWindow.id, title: activeWindow.title, end: activeWindow.end }
+    : null;
   d.history.push({ status: result.status, rt: result.rt, ts: Date.now() });
   if (d.history.length > HISTORY_SIZE) d.history.shift();
 
-  const icon = result.status === 'up' ? '✓' : result.status === 'degraded' ? '⚠' : '✗';
-  console.log(`[${d.lastCheck}] ${icon} ${svc.name.padEnd(20)} ${result.status.padEnd(8)} ${result.rt}ms`);
+  const icon = result.status === 'up' ? '✓' : result.status === 'maintenance' ? '🔧' : result.status === 'degraded' ? '⚠' : '✗';
+  console.log(`[${d.lastCheck}] ${icon} ${svc.name.padEnd(20)} ${result.status.padEnd(12)} ${result.rt ?? '—'}ms`);
 }
 
 function startMonitoring() {
@@ -362,6 +395,61 @@ const server = http.createServer(async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     return json(res, 200, { username: session.username, role: session.role });
+  }
+
+  // ── GET /api/maintenance ──────────────────────────────────────────────────
+  if (pathname === '/api/maintenance' && req.method === 'GET') {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    return json(res, 200, loadMaintenance());
+  }
+
+  // ── POST /api/maintenance ─────────────────────────────────────────────────
+  if (pathname === '/api/maintenance' && req.method === 'POST') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    let body;
+    try { body = JSON.parse(await readBody(req)); }
+    catch { return json(res, 400, { error: 'Invalid JSON' }); }
+
+    const { serviceId, start, end, title, description } = body;
+    if (!serviceId || !start || !end || !title)
+      return json(res, 400, { error: 'serviceId, start, end and title are required' });
+    if (new Date(end) <= new Date(start))
+      return json(res, 400, { error: 'end must be after start' });
+
+    config = loadConfig();
+    const svcName = config.services.find(s => s.id === Number(serviceId))?.name || '';
+    const win = {
+      id:          generateId(),
+      serviceId:   Number(serviceId),
+      serviceName: svcName,
+      title,
+      description: description || '',
+      start:       new Date(start).toISOString(),
+      end:         new Date(end).toISOString(),
+      createdBy:   session.username,
+      createdAt:   new Date().toISOString(),
+    };
+    const data = loadMaintenance();
+    data.windows.push(win);
+    saveMaintenance(data);
+    console.log(`[Maintenance] Scheduled: ${svcName} — ${title} (${win.start} → ${win.end})`);
+    return json(res, 201, win);
+  }
+
+  // ── DELETE /api/maintenance/:id ───────────────────────────────────────────
+  if (pathname.startsWith('/api/maintenance/') && req.method === 'DELETE') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    const id   = pathname.slice('/api/maintenance/'.length);
+    const data = loadMaintenance();
+    const idx  = data.windows.findIndex(w => w.id === id);
+    if (idx === -1) return json(res, 404, { error: 'Window not found' });
+    data.windows.splice(idx, 1);
+    saveMaintenance(data);
+    console.log(`[Maintenance] Deleted window ${id}`);
+    return json(res, 200, { ok: true });
   }
 
   // ── GET /api/status ────────────────────────────────────────────────────────

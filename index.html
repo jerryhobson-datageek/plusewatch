@@ -547,9 +547,379 @@
     position: relative;
     z-index: 1;
   }
+
+  /* ── LOGIN OVERLAY ── */
+  .login-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    transition: opacity 0.3s ease;
+  }
+
+  .login-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .login-overlay::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .login-card {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    margin: 1rem;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 24px;
+    padding: 2.5rem;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1);
+    animation: cardIn 0.4s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  @keyframes cardIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .login-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+
+  .login-logo-icon {
+    width: 52px;
+    height: 52px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+
+  .login-logo h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  .login-logo p {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: -6px;
+  }
+
+  .login-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 1rem;
+  }
+
+  .login-field label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .login-field input {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    font-family: inherit;
+  }
+
+  .login-field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+
+  .login-btn {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 11px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    font-family: inherit;
+    letter-spacing: 0.01em;
+  }
+
+  .login-btn:hover   { opacity: 0.9; }
+  .login-btn:active  { transform: scale(0.98); }
+  .login-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+  .login-error {
+    margin-top: 0.75rem;
+    padding: 9px 12px;
+    background: rgba(244,63,94,0.1);
+    border: 1px solid rgba(244,63,94,0.2);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: var(--red);
+    display: none;
+  }
+
+  .login-error.show { display: block; }
+
+  /* ── USER BADGE (header) ── */
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px 4px 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .user-badge:hover { background: var(--surface-hover); }
+
+  .user-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .user-name { font-size: 0.78rem; color: var(--text); font-weight: 500; }
+
+  .role-chip {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .role-admin  { background: rgba(99,102,241,0.2);  color: #818cf8; }
+  .role-viewer { background: rgba(100,116,139,0.2); color: var(--muted); }
+
+  /* User dropdown */
+  .user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: #0f1626;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: none;
+    z-index: 200;
+  }
+
+  .user-menu.open { display: block; }
+
+  .user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .user-menu-item:hover { background: var(--surface-hover); }
+  .user-menu-item.danger { color: var(--red); }
+
+  .menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  /* ── CHANGE PASSWORD MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(8,11,20,0.8);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: #0f1626;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 380px;
+    margin: 1rem;
+    box-shadow: 0 16px 60px rgba(0,0,0,0.5);
+    transform: translateY(10px);
+    transition: transform 0.2s;
+  }
+
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    color: var(--text);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 1.25rem;
+  }
+
+  .btn-secondary {
+    flex: 1;
+    padding: 9px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .btn-secondary:hover { background: var(--surface-hover); }
+
+  .btn-primary {
+    flex: 1;
+    padding: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover    { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .modal-msg {
+    margin-top: 0.75rem;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    border-radius: 7px;
+    display: none;
+  }
+
+  .modal-msg.error   { display: block; background: rgba(244,63,94,0.1);  color: var(--red);   border: 1px solid rgba(244,63,94,0.2); }
+  .modal-msg.success { display: block; background: rgba(34,211,160,0.1); color: var(--green); border: 1px solid rgba(34,211,160,0.2); }
 </style>
 </head>
 <body>
+
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">⚡</div>
+      <h1>PulseWatch</h1>
+      <p>Sign in to view the status dashboard</p>
+    </div>
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="loginUser" autocomplete="username" placeholder="Enter username" />
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password" placeholder="Enter password" />
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal-overlay" id="pwModal">
+  <div class="modal">
+    <h2>🔑 Change Password</h2>
+    <div class="login-field">
+      <label>Current Password</label>
+      <input type="password" id="pwCurrent" placeholder="Current password" />
+    </div>
+    <div class="login-field">
+      <label>New Password</label>
+      <input type="password" id="pwNew" placeholder="Min 8 characters" />
+    </div>
+    <div class="login-field">
+      <label>Confirm New Password</label>
+      <input type="password" id="pwConfirm" placeholder="Repeat new password" />
+    </div>
+    <div class="modal-msg" id="pwMsg"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closePwModal()">Cancel</button>
+      <button class="btn-primary" id="pwSaveBtn" onclick="doChangePassword()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- HEADER -->
 <header>
@@ -563,6 +933,16 @@
       Live
     </div>
     <div class="header-time" id="headerTime"></div>
+    <div class="user-badge" id="userBadge" onclick="toggleUserMenu()" style="display:none">
+      <div class="user-avatar" id="userAvatar"></div>
+      <span class="user-name" id="userName"></span>
+      <span class="role-chip" id="roleChip"></span>
+      <div class="user-menu" id="userMenu">
+        <button class="user-menu-item" onclick="openPwModal(); event.stopPropagation()">🔑 Change Password</button>
+        <div class="menu-divider"></div>
+        <button class="user-menu-item danger" onclick="doLogout()">↩ Sign Out</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -622,6 +1002,187 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+
+let authToken = sessionStorage.getItem('pw_token') || null;
+let currentUser = null;
+
+function authHeaders() {
+  return authToken ? { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+}
+
+function showLogin(msg) {
+  const overlay = document.getElementById('loginOverlay');
+  overlay.classList.remove('hidden');
+  document.getElementById('userBadge').style.display = 'none';
+  if (msg) showLoginError(msg);
+}
+
+function hideLogin() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function clearLoginError() {
+  document.getElementById('loginError').classList.remove('show');
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const btn = document.getElementById('loginBtn');
+
+  clearLoginError();
+  if (!username || !password) { showLoginError('Please enter username and password.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Login failed.');
+      return;
+    }
+    authToken = data.token;
+    currentUser = { username: data.username, role: data.role };
+    sessionStorage.setItem('pw_token', authToken);
+    document.getElementById('loginPass').value = '';
+    setUserBadge(currentUser);
+    hideLogin();
+    fetchStatus();
+  } catch {
+    showLoginError('Could not reach server.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+async function doLogout() {
+  closeUserMenu();
+  try { await fetch('/api/logout', { method: 'POST', headers: authHeaders() }); } catch {}
+  authToken = null;
+  currentUser = null;
+  sessionStorage.removeItem('pw_token');
+  showLogin();
+}
+
+async function checkAuth() {
+  if (!authToken) { showLogin(); return; }
+  try {
+    const res = await fetch('/api/me', { headers: authHeaders() });
+    if (!res.ok) { showLogin(); return; }
+    const data = await res.json();
+    currentUser = { username: data.username, role: data.role };
+    setUserBadge(currentUser);
+    hideLogin();
+    fetchStatus();
+  } catch {
+    showLogin();
+  }
+}
+
+function setUserBadge(user) {
+  const badge = document.getElementById('userBadge');
+  badge.style.display = 'flex';
+  document.getElementById('userAvatar').textContent = user.username[0].toUpperCase();
+  document.getElementById('userName').textContent = user.username;
+  const chip = document.getElementById('roleChip');
+  chip.textContent = user.role;
+  chip.className = `role-chip role-${user.role}`;
+}
+
+function toggleUserMenu() {
+  document.getElementById('userMenu').classList.toggle('open');
+}
+
+function closeUserMenu() {
+  document.getElementById('userMenu').classList.remove('open');
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('userBadge').contains(e.target)) closeUserMenu();
+});
+
+// ── Enter key on login form ───────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !document.getElementById('loginOverlay').classList.contains('hidden')) {
+    doLogin();
+  }
+});
+
+// ─── CHANGE PASSWORD MODAL ────────────────────────────────────────────────────
+
+function openPwModal() {
+  closeUserMenu();
+  document.getElementById('pwCurrent').value = '';
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwConfirm').value = '';
+  const msg = document.getElementById('pwMsg');
+  msg.className = 'modal-msg';
+  msg.textContent = '';
+  document.getElementById('pwModal').classList.add('open');
+}
+
+function closePwModal() {
+  document.getElementById('pwModal').classList.remove('open');
+}
+
+async function doChangePassword() {
+  const current = document.getElementById('pwCurrent').value;
+  const next    = document.getElementById('pwNew').value;
+  const confirm = document.getElementById('pwConfirm').value;
+  const msg     = document.getElementById('pwMsg');
+  const btn     = document.getElementById('pwSaveBtn');
+
+  msg.className = 'modal-msg';
+
+  if (!current || !next || !confirm) {
+    msg.className = 'modal-msg error'; msg.textContent = 'All fields are required.'; return;
+  }
+  if (next.length < 8) {
+    msg.className = 'modal-msg error'; msg.textContent = 'New password must be at least 8 characters.'; return;
+  }
+  if (next !== confirm) {
+    msg.className = 'modal-msg error'; msg.textContent = 'New passwords do not match.'; return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/change-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ currentPassword: current, newPassword: next }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.className = 'modal-msg error';
+      msg.textContent = data.error || 'Failed to change password.';
+    } else {
+      msg.className = 'modal-msg success';
+      msg.textContent = 'Password changed successfully!';
+      setTimeout(closePwModal, 1500);
+    }
+  } catch {
+    msg.className = 'modal-msg error';
+    msg.textContent = 'Could not reach server.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
 let SERVICES    = [];
@@ -892,7 +1453,8 @@ function renderIncidents() {
 
 async function fetchStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetch('/api/status', { headers: authHeaders() });
+    if (res.status === 401) { showLogin('Session expired. Please sign in again.'); return; }
     if (!res.ok) throw new Error(res.status);
     const { services } = await res.json();
 
@@ -955,9 +1517,9 @@ function updateClock() {
 
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 
-fetchStatus();
+checkAuth();                          // validate token or show login screen
 updateClock();
-setInterval(fetchStatus, 15000);
+setInterval(fetchStatus, 15000);      // polling continues once logged in
 setInterval(updateClock, 1000);
 </script>
 </body>

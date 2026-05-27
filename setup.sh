@@ -66,6 +66,30 @@ systemctl daemon-reload
 systemctl enable pulsewatch
 systemctl restart pulsewatch
 
+# ── Generate default credentials (first run only) ─────────────────────────────
+sleep 1  # give the service a moment to start and write defaults
+node -e "
+const crypto = require('crypto');
+const fs     = require('fs');
+const cfg    = JSON.parse(fs.readFileSync('/opt/pulsewatch/config.json'));
+if (!cfg.credentials || cfg.credentials.length === 0) {
+  const as = crypto.randomBytes(16).toString('hex');
+  const vs = crypto.randomBytes(16).toString('hex');
+  cfg.credentials = [
+    { username:'admin',  role:'admin',  salt:as, hash:crypto.scryptSync('admin123', as, 64).toString('hex') },
+    { username:'viewer', role:'viewer', salt:vs, hash:crypto.scryptSync('viewer123',vs, 64).toString('hex') },
+  ];
+  fs.writeFileSync('/opt/pulsewatch/config.json', JSON.stringify(cfg, null, 2));
+  console.log('');
+  console.log('  Default credentials created:');
+  console.log('    Admin:   admin  / admin123');
+  console.log('    Viewer:  viewer / viewer123');
+  console.log('  Change these after first login!');
+} else {
+  console.log('  Credentials already exist — skipping.');
+}
+" 2>/dev/null || true
+
 # ── nginx reverse proxy ────────────────────────────────────────────────────────
 echo "[5/5] Configuring nginx..."
 

@@ -119,6 +119,28 @@ If you use Nginx Proxy Manager, add a new Proxy Host:
 
 ---
 
+## Authentication
+
+PulseWatch has two roles:
+
+| Role | Access |
+|---|---|
+| **Admin** | Full dashboard access + Change Password |
+| **Viewer** | Read-only dashboard — status and history only |
+
+Default credentials are created automatically on first run:
+
+| Username | Password | Role |
+|---|---|---|
+| `admin` | `admin123` | Admin |
+| `viewer` | `viewer123` | Viewer |
+
+> **Change these immediately after first login** — click your username in the top-right corner → Change Password.
+
+Passwords are hashed with `scrypt` and stored in `config.json`. Sessions last 24 hours and are stored in browser `sessionStorage` (cleared when the tab closes).
+
+---
+
 ## Managing Services
 
 Services are configured in `/opt/pulsewatch/config.json` on the server.

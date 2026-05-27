@@ -675,18 +675,20 @@
 
   /* wrench on cards (admin only) */
   .card-maint-btn {
-    background: none;
-    border: none;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.25);
     cursor: pointer;
-    font-size: 0.8rem;
-    opacity: 0.4;
-    padding: 2px 4px;
-    border-radius: 4px;
-    transition: opacity 0.15s;
+    font-size: 0.7rem;
+    color: #a5b4fc;
+    padding: 3px 7px;
+    border-radius: 6px;
+    transition: all 0.15s;
     line-height: 1;
+    font-family: inherit;
+    white-space: nowrap;
   }
 
-  .card-maint-btn:hover { opacity: 1; background: var(--surface-hover); }
+  .card-maint-btn:hover { background: rgba(99,102,241,0.25); border-color: rgba(99,102,241,0.5); color: #c7d2fe; }
 
   /* ── SSL BADGE ── */
   .ssl-row {
@@ -1516,7 +1518,7 @@ function renderCard(d) {
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <div class="status-badge badge-${isPending ? 'up' : d.status}">${isPending ? 'checking' : d.status}</div>
-        ${currentUser?.role === 'admin' ? `<button class="card-maint-btn" title="Schedule Maintenance" onclick="openMaintModal(${d.id});event.stopPropagation()">🔧</button>` : ''}
+        ${currentUser?.role === 'admin' ? `<button class="card-maint-btn" onclick="openMaintModal(${d.id});event.stopPropagation()">🔧 Schedule</button>` : ''}
       </div>
     </div>
 

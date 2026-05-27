@@ -1,0 +1,13 @@
+# Enforce LF line endings for all text files — prevents Windows CRLF
+# from being committed and causing "local modifications" on Linux pulls.
+* text=auto eol=lf
+
+# Shell scripts must always be LF (CRLF breaks bash)
+*.sh text eol=lf
+
+# Server / web files
+*.js   text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf

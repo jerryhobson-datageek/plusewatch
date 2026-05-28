@@ -1165,6 +1165,44 @@
   </div>
 </div>
 
+<!-- ADD / EDIT SERVICE MODAL -->
+<div class="modal-overlay" id="serviceModal">
+  <div class="modal" style="max-width:440px">
+    <h2 id="serviceModalTitle">＋ Add Service</h2>
+    <input type="hidden" id="serviceEditId" value="" />
+    <div class="login-field">
+      <label>Name</label>
+      <input type="text" id="serviceName" placeholder="e.g. My App" />
+    </div>
+    <div class="login-field">
+      <label>URL</label>
+      <input type="text" id="serviceUrl" placeholder="https://example.com or host:port" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+      <div class="login-field">
+        <label>Type</label>
+        <select id="serviceType" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:0.9rem;outline:none;width:100%;font-family:inherit">
+          <option value="HTTP">HTTP / HTTPS</option>
+          <option value="TCP">TCP</option>
+        </select>
+      </div>
+      <div class="login-field">
+        <label>Interval (sec)</label>
+        <input type="number" id="serviceInterval" placeholder="30" min="5" />
+      </div>
+    </div>
+    <div class="login-field">
+      <label>Degraded Threshold (ms, optional)</label>
+      <input type="number" id="serviceThreshold" placeholder="e.g. 1000" min="1" />
+    </div>
+    <div class="modal-msg" id="serviceMsg"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeServiceModal()">Cancel</button>
+      <button class="btn-primary" id="serviceSaveBtn" onclick="doSaveService()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- SCHEDULE MAINTENANCE MODAL -->
 <div class="modal-overlay" id="maintModal">
   <div class="modal" style="max-width:440px">
@@ -1277,6 +1315,15 @@
   <!-- Monitor Cards Grid -->
   <div class="monitors-grid" id="monitorsGrid"></div>
 
+  <!-- Service Management (admin only) -->
+  <div class="maint-section admin-only" id="servicesSection">
+    <div class="section-header">
+      <div class="section-title">Services</div>
+      <button class="add-maint-btn" onclick="openServiceModal()">＋ Add Service</button>
+    </div>
+    <div class="maint-windows" id="servicesList"></div>
+  </div>
+
   <!-- Maintenance Schedule (admin only) -->
   <div class="maint-section admin-only" id="maintSection">
     <div class="section-header">
@@ -1388,6 +1435,7 @@ async function doLogin() {
     hideLogin();
     fetchStatus();
     fetchMaintenance();
+    fetchServicesList();
   } catch {
     showLoginError('Could not reach server.');
   } finally {
@@ -1416,6 +1464,7 @@ async function checkAuth() {
     hideLogin();
     fetchStatus();
     fetchMaintenance();
+    fetchServicesList();
   } catch {
     showLogin();
   }
@@ -1908,6 +1957,9 @@ async function fetchStatus() {
 
     if (changed.length || sslChanged.length) renderIncidents();
 
+    // Refresh service list status dots
+    if (currentUser?.role === 'admin' && servicesCache.length) renderServicesList();
+
   } catch (e) {
     console.warn('PulseWatch: /api/status unreachable —', e.message);
   }
@@ -1933,6 +1985,122 @@ function showSSLToast(name, sslStatus, message) {
   el.innerHTML = `<span>${icons[sslStatus] || '🔒'}</span> <strong style="color:${colors[sslStatus] || 'var(--muted)'}">${message}</strong>`;
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 5000);
+}
+
+// ─── SERVICE MANAGEMENT ──────────────────────────────────────────────────────
+
+let servicesCache = [];
+
+async function fetchServicesList() {
+  if (currentUser?.role !== 'admin') return;
+  try {
+    const res  = await fetch('/api/services', { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    servicesCache = data.services || [];
+    renderServicesList();
+  } catch {}
+}
+
+function renderServicesList() {
+  const list = document.getElementById('servicesList');
+  if (!servicesCache.length) {
+    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No services configured.</span></div>`;
+    return;
+  }
+  list.innerHTML = servicesCache.map(s => {
+    const st  = state[s.id];
+    const dot = st ? colHex(st.status) : 'var(--muted)';
+    return `
+    <div class="maint-window-item">
+      <div>
+        <div class="maint-win-title"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:6px"></span>${s.name}</div>
+        <div class="maint-win-meta">${s.url} · ${s.type}${s.degradedThreshold ? ' · degraded > ' + s.degradedThreshold + 'ms' : ''}${s.interval ? ' · every ' + s.interval + 's' : ''}</div>
+      </div>
+      <button class="maint-delete-btn" style="border-color:rgba(99,102,241,0.25);color:#a5b4fc" onclick="openServiceModal(${s.id})">Edit</button>
+      <button class="maint-delete-btn" onclick="deleteService(${s.id}, '${s.name.replace(/'/g, "\\'")}')">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+function openServiceModal(id = null) {
+  const isEdit = id !== null;
+  document.getElementById('serviceModalTitle').textContent = isEdit ? '✏️ Edit Service' : '＋ Add Service';
+  document.getElementById('serviceEditId').value = id ?? '';
+
+  const svc = isEdit ? servicesCache.find(s => s.id === id) : null;
+  document.getElementById('serviceName').value      = svc?.name      || '';
+  document.getElementById('serviceUrl').value       = svc?.url       || '';
+  document.getElementById('serviceType').value      = svc?.type      || 'HTTP';
+  document.getElementById('serviceInterval').value  = svc?.interval  || '';
+  document.getElementById('serviceThreshold').value = svc?.degradedThreshold || '';
+
+  const msg = document.getElementById('serviceMsg');
+  msg.className = 'modal-msg'; msg.textContent = '';
+  document.getElementById('serviceModal').classList.add('open');
+}
+
+function closeServiceModal() {
+  document.getElementById('serviceModal').classList.remove('open');
+}
+
+async function doSaveService() {
+  const id        = document.getElementById('serviceEditId').value;
+  const name      = document.getElementById('serviceName').value.trim();
+  const url       = document.getElementById('serviceUrl').value.trim();
+  const type      = document.getElementById('serviceType').value;
+  const interval  = document.getElementById('serviceInterval').value;
+  const threshold = document.getElementById('serviceThreshold').value;
+  const msg       = document.getElementById('serviceMsg');
+  const btn       = document.getElementById('serviceSaveBtn');
+
+  msg.className = 'modal-msg';
+  if (!name) { msg.className = 'modal-msg error'; msg.textContent = 'Name is required.'; return; }
+  if (!url)  { msg.className = 'modal-msg error'; msg.textContent = 'URL is required.';  return; }
+
+  const payload = { name, url, type };
+  if (interval)  payload.interval = Number(interval);
+  if (threshold) payload.degradedThreshold = Number(threshold);
+  // For edit: explicitly null-out fields if empty so server removes them
+  if (id) {
+    if (!interval)  payload.interval = null;
+    if (!threshold) payload.degradedThreshold = null;
+  }
+
+  btn.disabled = true;
+  try {
+    const url2 = id ? `/api/services/${id}` : '/api/services';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url2, { method, headers: authHeaders(), body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.className = 'modal-msg error'; msg.textContent = data.error || 'Failed to save.';
+    } else {
+      closeServiceModal();
+      await fetchServicesList();
+      await fetchStatus();
+    }
+  } catch {
+    msg.className = 'modal-msg error'; msg.textContent = 'Could not reach server.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteService(id, name) {
+  if (!confirm(`Delete service "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/services/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (res.ok) {
+      // Remove the card from the grid immediately
+      const card = document.getElementById(`card-${id}`);
+      if (card) card.remove();
+      delete state[id];
+      SERVICES = SERVICES.filter(s => s.id !== id);
+      await fetchServicesList();
+      await fetchStatus();
+    }
+  } catch {}
 }
 
 // ─── MAINTENANCE ─────────────────────────────────────────────────────────────

@@ -302,24 +302,33 @@ async function runCheck(svc) {
   console.log(`[${d.lastCheck}] ${icon} ${svc.name.padEnd(20)} ${result.status.padEnd(12)} ${result.rt ?? '—'}ms`);
 }
 
-function startMonitoring() {
-  config.services.forEach((svc, i) => {
-    const interval = (svc.interval || config.interval || 30) * 1000;
+// Track intervals so we can stop monitoring a service on demand
+const intervals = new Map(); // serviceId -> { check, ssl }
 
-    // Health checks — staggered start
-    setTimeout(() => {
-      runCheck(svc);
-      setInterval(() => runCheck(svc), interval);
-    }, i * 600);
-
-    // SSL checks — staggered start, then every 6 hours
+function startServiceMonitoring(svc, delay = 0) {
+  const interval = (svc.interval || config.interval || 30) * 1000;
+  setTimeout(() => {
+    runCheck(svc);
+    const checkId = setInterval(() => runCheck(svc), interval);
+    let sslId = null;
     if (isHTTPS(svc) && svc.sslCheck !== false) {
-      setTimeout(() => {
-        runSSLCheck(svc);
-        setInterval(() => runSSLCheck(svc), SSL_INTERVAL);
-      }, 3000 + i * 1000); // wait 3s after startup so health checks go first
+      setTimeout(() => runSSLCheck(svc), 3000);
+      sslId = setInterval(() => runSSLCheck(svc), SSL_INTERVAL);
     }
-  });
+    intervals.set(svc.id, { check: checkId, ssl: sslId });
+  }, delay);
+}
+
+function stopServiceMonitoring(serviceId) {
+  const ids = intervals.get(serviceId);
+  if (!ids) return;
+  if (ids.check) clearInterval(ids.check);
+  if (ids.ssl)   clearInterval(ids.ssl);
+  intervals.delete(serviceId);
+}
+
+function startMonitoring() {
+  config.services.forEach((svc, i) => startServiceMonitoring(svc, i * 600));
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -450,6 +459,119 @@ const server = http.createServer(async (req, res) => {
     data.windows.splice(idx, 1);
     saveMaintenance(data);
     console.log(`[Maintenance] Deleted window ${id}`);
+    return json(res, 200, { ok: true });
+  }
+
+  // ── GET /api/services (admin) ─────────────────────────────────────────────
+  if (pathname === '/api/services' && req.method === 'GET') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    config = loadConfig();
+    return json(res, 200, { services: config.services });
+  }
+
+  // ── POST /api/services (admin) — add new service ──────────────────────────
+  if (pathname === '/api/services' && req.method === 'POST') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    let body;
+    try { body = JSON.parse(await readBody(req)); }
+    catch { return json(res, 400, { error: 'Invalid JSON' }); }
+
+    const { name, url, type, degradedThreshold, interval, sslCheck } = body;
+    if (!name || !url || !type) return json(res, 400, { error: 'name, url and type are required' });
+    if (!['HTTP', 'TCP'].includes(type)) return json(res, 400, { error: 'type must be HTTP or TCP' });
+
+    config = loadConfig();
+    const newId = (config.services.reduce((m, s) => Math.max(m, s.id), 0) || 0) + 1;
+    const svc = {
+      id: newId,
+      name: name.trim(),
+      url: url.trim(),
+      type,
+      ...(degradedThreshold ? { degradedThreshold: Number(degradedThreshold) } : {}),
+      ...(interval          ? { interval:          Number(interval) }          : {}),
+      ...(sslCheck === false ? { sslCheck: false } : {}),
+    };
+    config.services.push(svc);
+    saveConfig(config);
+
+    // Initialize state and start monitoring
+    state[svc.id] = {
+      id: svc.id, name: svc.name, url: svc.url, type: svc.type,
+      status: 'pending', rt: null, history: [], lastCheck: null,
+      maintenance: null,
+      degradedThreshold: svc.degradedThreshold || null,
+      ssl: isHTTPS(svc) ? { status: 'pending', daysLeft: null, expiry: null } : null,
+    };
+    startServiceMonitoring(svc);
+
+    console.log(`[Services] Added: ${svc.name} (id=${svc.id}) by ${session.username}`);
+    return json(res, 201, { service: svc });
+  }
+
+  // ── PUT /api/services/:id (admin) — update ────────────────────────────────
+  if (pathname.startsWith('/api/services/') && req.method === 'PUT') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    const id = Number(pathname.slice('/api/services/'.length));
+    let body;
+    try { body = JSON.parse(await readBody(req)); }
+    catch { return json(res, 400, { error: 'Invalid JSON' }); }
+
+    config = loadConfig();
+    const idx = config.services.findIndex(s => s.id === id);
+    if (idx === -1) return json(res, 404, { error: 'Service not found' });
+    const svc = config.services[idx];
+
+    if (body.name !== undefined)              svc.name = String(body.name).trim();
+    if (body.url  !== undefined)              svc.url  = String(body.url).trim();
+    if (body.type !== undefined)              svc.type = body.type;
+    if (body.degradedThreshold !== undefined) {
+      if (body.degradedThreshold === null || body.degradedThreshold === '') delete svc.degradedThreshold;
+      else svc.degradedThreshold = Number(body.degradedThreshold);
+    }
+    if (body.interval !== undefined) {
+      if (body.interval === null || body.interval === '') delete svc.interval;
+      else svc.interval = Number(body.interval);
+    }
+    if (body.sslCheck !== undefined) {
+      if (body.sslCheck === false) svc.sslCheck = false;
+      else delete svc.sslCheck;
+    }
+    saveConfig(config);
+
+    // Update state in-place (preserve history)
+    const s = state[svc.id];
+    s.name = svc.name; s.url = svc.url; s.type = svc.type;
+    s.degradedThreshold = svc.degradedThreshold || null;
+    if (isHTTPS(svc) && !s.ssl) s.ssl = { status: 'pending', daysLeft: null, expiry: null };
+    if (!isHTTPS(svc)) s.ssl = null;
+
+    // Restart monitoring with new interval/config
+    stopServiceMonitoring(svc.id);
+    startServiceMonitoring(svc);
+
+    console.log(`[Services] Updated: ${svc.name} (id=${svc.id}) by ${session.username}`);
+    return json(res, 200, { service: svc });
+  }
+
+  // ── DELETE /api/services/:id (admin) ──────────────────────────────────────
+  if (pathname.startsWith('/api/services/') && req.method === 'DELETE') {
+    const session = requireAuth(req, res, 'admin');
+    if (!session) return;
+    const id = Number(pathname.slice('/api/services/'.length));
+    config = loadConfig();
+    const idx = config.services.findIndex(s => s.id === id);
+    if (idx === -1) return json(res, 404, { error: 'Service not found' });
+    const svc = config.services[idx];
+
+    config.services.splice(idx, 1);
+    saveConfig(config);
+    stopServiceMonitoring(id);
+    delete state[id];
+
+    console.log(`[Services] Deleted: ${svc.name} (id=${id}) by ${session.username}`);
     return json(res, 200, { ok: true });
   }
 

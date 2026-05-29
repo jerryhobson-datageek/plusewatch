@@ -720,7 +720,94 @@
 
   /* Hide admin-only elements unless body has .is-admin */
   .admin-only { display: none !important; }
-  body.is-admin .admin-only { display: flex !important; }
+  body.is-admin .admin-only         { display: block       !important; }
+  body.is-admin button.admin-only   { display: inline-flex !important; }
+
+  /* ── SERVICE MANAGEMENT LIST ── */
+  .services-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+
+  .service-row {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 0.95rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .service-row:last-child { border-bottom: none; }
+  .service-row:hover      { background: var(--surface-hover); }
+
+  .service-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .service-info { min-width: 0; }
+
+  .service-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .service-meta {
+    font-size: 0.72rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .service-meta .sep {
+    color: var(--border);
+    margin: 0 6px;
+  }
+
+  .service-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .svc-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid;
+    background: none;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .svc-btn-edit {
+    border-color: rgba(99,102,241,0.3);
+    color: #a5b4fc;
+  }
+  .svc-btn-edit:hover {
+    background: rgba(99,102,241,0.15);
+    border-color: rgba(99,102,241,0.5);
+  }
+
+  .svc-btn-delete {
+    border-color: rgba(244,63,94,0.25);
+    color: var(--red);
+  }
+  .svc-btn-delete:hover {
+    background: rgba(244,63,94,0.1);
+    border-color: rgba(244,63,94,0.5);
+  }
 
   /* ── SSL BADGE ── */
   .ssl-row {
@@ -1321,7 +1408,7 @@
       <div class="section-title">Services</div>
       <button class="add-maint-btn" onclick="openServiceModal()">＋ Add Service</button>
     </div>
-    <div class="maint-windows" id="servicesList"></div>
+    <div class="services-list" id="servicesList"></div>
   </div>
 
   <!-- Maintenance Schedule (admin only) -->
@@ -2005,20 +2092,29 @@ async function fetchServicesList() {
 function renderServicesList() {
   const list = document.getElementById('servicesList');
   if (!servicesCache.length) {
-    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No services configured.</span></div>`;
+    list.innerHTML = `<div class="service-row"><span></span><div class="service-info"><div class="service-meta">No services configured. Click ＋ Add Service to create one.</div></div><span></span></div>`;
     return;
   }
   list.innerHTML = servicesCache.map(s => {
     const st  = state[s.id];
     const dot = st ? colHex(st.status) : 'var(--muted)';
+    const meta = [
+      s.url,
+      s.type,
+      s.degradedThreshold ? `degraded > ${s.degradedThreshold}ms` : null,
+      s.interval ? `every ${s.interval}s` : null,
+    ].filter(Boolean).join('<span class="sep">·</span>');
     return `
-    <div class="maint-window-item">
-      <div>
-        <div class="maint-win-title"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:6px"></span>${s.name}</div>
-        <div class="maint-win-meta">${s.url} · ${s.type}${s.degradedThreshold ? ' · degraded > ' + s.degradedThreshold + 'ms' : ''}${s.interval ? ' · every ' + s.interval + 's' : ''}</div>
+    <div class="service-row">
+      <div class="service-dot" style="background:${dot}"></div>
+      <div class="service-info">
+        <div class="service-name">${s.name}</div>
+        <div class="service-meta">${meta}</div>
       </div>
-      <button class="maint-delete-btn" style="border-color:rgba(99,102,241,0.25);color:#a5b4fc" onclick="openServiceModal(${s.id})">Edit</button>
-      <button class="maint-delete-btn" onclick="deleteService(${s.id}, '${s.name.replace(/'/g, "\\'")}')">Delete</button>
+      <div class="service-actions">
+        <button class="svc-btn svc-btn-edit"   onclick="openServiceModal(${s.id})">Edit</button>
+        <button class="svc-btn svc-btn-delete" onclick="deleteService(${s.id}, '${s.name.replace(/'/g, "\\'")}')">Delete</button>
+      </div>
     </div>`;
   }).join('');
 }

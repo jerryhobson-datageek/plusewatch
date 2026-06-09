@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PulseWatch Status</title>
+<style>
+  :root {
+    --bg:       #f1f5f9;
+    --card:     #ffffff;
+    --border:   rgba(0,0,0,0.08);
+    --text:     #1e293b;
+    --muted:    #64748b;
+    --green:    #059669;
+    --green-bg: rgba(5,150,105,0.08);
+    --yellow:   #d97706;
+    --yellow-bg:rgba(217,119,6,0.08);
+    --red:      #dc2626;
+    --red-bg:   rgba(220,38,38,0.08);
+    --gray:     #64748b;
+    --gray-bg:  rgba(100,116,139,0.08);
+    --accent:   #4f46e5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:       #080b14;
+      --card:     rgba(255,255,255,0.04);
+      --border:   rgba(255,255,255,0.07);
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --green:    #22d3a0;
+      --green-bg: rgba(34,211,160,0.1);
+      --yellow:   #f59e0b;
+      --yellow-bg:rgba(245,158,11,0.1);
+      --red:      #f43f5e;
+      --red-bg:   rgba(244,63,94,0.1);
+      --gray:     #64748b;
+      --gray-bg:  rgba(100,116,139,0.1);
+      --accent:   #6366f1;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+  }
+
+  .logo {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; }
+
+  .last-updated {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  /* ── MAIN ── */
+  main {
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+    flex: 1;
+  }
+
+  /* ── BANNER ── */
+  .banner {
+    border-radius: 16px;
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    border: 1px solid transparent;
+    transition: background 0.3s;
+  }
+
+  .banner.operational { background: var(--green-bg);  border-color: rgba(5,150,105,0.2); }
+  .banner.degraded    { background: var(--yellow-bg); border-color: rgba(217,119,6,0.2); }
+  .banner.partial_outage,
+  .banner.major_outage{ background: var(--red-bg);    border-color: rgba(220,38,38,0.2); }
+  .banner.pending     { background: var(--gray-bg);   border-color: rgba(100,116,139,0.2); }
+
+  @media (prefers-color-scheme: dark) {
+    .banner.operational { border-color: rgba(34,211,160,0.25); }
+    .banner.degraded    { border-color: rgba(245,158,11,0.25); }
+    .banner.partial_outage,
+    .banner.major_outage{ border-color: rgba(244,63,94,0.25); }
+  }
+
+  .banner-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .banner.operational .banner-dot  { background: var(--green); box-shadow: 0 0 12px var(--green); }
+  .banner.degraded .banner-dot     { background: var(--yellow); box-shadow: 0 0 12px var(--yellow); }
+  .banner.partial_outage .banner-dot,
+  .banner.major_outage .banner-dot { background: var(--red); box-shadow: 0 0 12px var(--red); animation: pulse-fast 1s ease-in-out infinite; }
+  .banner.pending .banner-dot      { background: var(--gray); }
+
+  @keyframes pulse      { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+  @keyframes pulse-fast { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+  .banner-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .banner.operational .banner-title  { color: var(--green); }
+  .banner.degraded .banner-title     { color: var(--yellow); }
+  .banner.partial_outage .banner-title,
+  .banner.major_outage .banner-title { color: var(--red); }
+  .banner.pending .banner-title      { color: var(--muted); }
+
+  .banner-sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── SERVICE LIST ── */
+  .service-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+
+  .svc-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .svc-row:last-child { border-bottom: none; }
+
+  .svc-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .svc-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .svc-uptime {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    margin-right: 0.5rem;
+  }
+
+  .svc-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+
+  .badge-up          { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(5,150,105,0.25); }
+  .badge-down        { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(220,38,38,0.25); }
+  .badge-degraded    { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(217,119,6,0.25); }
+  .badge-maintenance { background: var(--gray-bg);   color: var(--gray);   border: 1px solid rgba(100,116,139,0.2); }
+  .badge-pending     { background: var(--gray-bg);   color: var(--gray);   border: 1px solid rgba(100,116,139,0.2); }
+
+  @media (prefers-color-scheme: dark) {
+    .badge-up       { border-color: rgba(34,211,160,0.3); }
+    .badge-down     { border-color: rgba(244,63,94,0.3); }
+    .badge-degraded { border-color: rgba(245,158,11,0.3); }
+  }
+
+  /* uptime bar */
+  .svc-bar-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .svc-bar-inner {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  .loading {
+    text-align: center;
+    color: var(--muted);
+    padding: 3rem;
+    font-size: 0.85rem;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    main { padding: 1.5rem 1rem; }
+    .banner { padding: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    PulseWatch <span>&nbsp;/ Status</span>
+  </div>
+  <div class="last-updated" id="lastUpdated">—</div>
+</header>
+
+<main>
+  <div class="banner pending" id="banner">
+    <div class="banner-dot"></div>
+    <div>
+      <div class="banner-title" id="bannerTitle">Checking services…</div>
+      <div class="banner-sub" id="bannerSub">&nbsp;</div>
+    </div>
+  </div>
+
+  <div class="section-label">Services</div>
+  <div id="serviceList"><div class="loading">Loading…</div></div>
+</main>
+
+<footer>
+  Powered by <a href="/">PulseWatch</a> &middot; Refreshes every 30 s
+</footer>
+
+<script>
+const BANNERS = {
+  operational:   { title: 'All Systems Operational',     sub: 'All monitored services are running normally.' },
+  degraded:      { title: 'Degraded Performance',        sub: 'Some services are responding slowly.' },
+  partial_outage:{ title: 'Partial Service Disruption',  sub: 'One or more services are experiencing issues.' },
+  major_outage:  { title: 'Major Service Outage',        sub: 'Multiple services are down.' },
+  pending:       { title: 'Checking services…',          sub: ' ' },
+};
+
+const STATUS_LABELS = { up: 'Operational', down: 'Outage', degraded: 'Degraded', maintenance: 'Maintenance', pending: 'Checking' };
+const DOT_COLORS    = { up: 'var(--green)', down: 'var(--red)', degraded: 'var(--yellow)', maintenance: 'var(--gray)', pending: 'var(--gray)' };
+const BAR_COLORS    = { up: 'var(--green)', down: 'var(--red)', degraded: 'var(--yellow)', maintenance: 'var(--gray)' };
+
+function barColor(pct) {
+  if (pct >= 99) return 'var(--green)';
+  if (pct >= 95) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+async function fetchAndRender() {
+  try {
+    const res  = await fetch('/api/public/status');
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+
+    // Banner
+    const banner = document.getElementById('banner');
+    const b = BANNERS[data.overall] || BANNERS.pending;
+    banner.className = `banner ${data.overall}`;
+    document.getElementById('bannerTitle').textContent = b.title;
+    document.getElementById('bannerSub').textContent   = b.sub;
+
+    // Last updated
+    document.getElementById('lastUpdated').textContent = `Updated ${timeAgo(data.lastUpdated)}`;
+
+    // Services
+    const list = document.getElementById('serviceList');
+    if (!data.services.length) {
+      list.innerHTML = '<div class="loading">No services configured.</div>';
+      return;
+    }
+
+    list.innerHTML = `<div class="service-card">${data.services.map(s => {
+      const pct     = s.uptime24h != null ? s.uptime24h.toFixed(2) : null;
+      const dotCol  = DOT_COLORS[s.status] || 'var(--gray)';
+      const barCol  = pct != null ? barColor(parseFloat(pct)) : 'var(--gray)';
+      const badgeCls = `badge-${s.status || 'pending'}`;
+      const label    = STATUS_LABELS[s.status] || s.status;
+      return `<div>
+        <div class="svc-row">
+          <div class="svc-dot" style="background:${dotCol}"></div>
+          <div class="svc-name">${s.name}</div>
+          ${pct != null ? `<div class="svc-uptime">${pct}%</div>` : ''}
+          <span class="svc-badge ${badgeCls}">${label}</span>
+        </div>
+        <div class="svc-bar-wrap">
+          <div class="svc-bar-inner" style="width:${pct ?? 0}%;background:${barCol}"></div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+
+  } catch {
+    document.getElementById('lastUpdated').textContent = 'Could not reach server';
+  }
+}
+
+fetchAndRender();
+setInterval(fetchAndRender, 30000);
+
+// Keep "Updated X ago" ticking
+setInterval(() => {
+  const el = document.getElementById('lastUpdated');
+  if (el.textContent.includes('ago')) fetchAndRender();
+}, 30000);
+</script>
+</body>
+</html>

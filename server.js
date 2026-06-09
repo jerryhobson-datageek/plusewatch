@@ -943,6 +943,31 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { serviceId: id, serviceName: svc.name, range, points });
   }
 
+  // ── GET /status — public status page ─────────────────────────────────────
+  if (pathname === '/status' && req.method === 'GET') {
+    fs.readFile(path.join(__dirname, 'public.html'), (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      res.end(data);
+    });
+    return;
+  }
+
+  // ── GET /api/public/status — no auth ──────────────────────────────────────
+  if (pathname === '/api/public/status' && req.method === 'GET') {
+    const services = Object.values(state).map(s => ({
+      id: s.id, name: s.name, status: s.status, uptime24h: s.uptime24h,
+    }));
+    const live = services.filter(s => s.status !== 'pending');
+    const overall = live.length === 0              ? 'pending'
+      : live.every(s => s.status === 'up' || s.status === 'maintenance') ? 'operational'
+      : live.every(s => s.status === 'down')       ? 'major_outage'
+      : live.some(s  => s.status === 'down')       ? 'partial_outage'
+      : live.some(s  => s.status === 'degraded')   ? 'degraded'
+      : 'operational';
+    return json(res, 200, { overall, services, lastUpdated: new Date().toISOString() });
+  }
+
   // ── Static files ───────────────────────────────────────────────────────────
   const filePath = pathname === '/' ? INDEX_PATH : path.join(__dirname, pathname);
   if (!filePath.startsWith(__dirname)) { res.writeHead(403); res.end('Forbidden'); return; }

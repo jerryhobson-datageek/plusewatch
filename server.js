@@ -9,6 +9,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const { DatabaseSync } = require('node:sqlite');
+const os   = require('os');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -772,6 +773,33 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  // ── GET /api/sysinfo ──────────────────────────────────────────────────────
+  if (pathname === '/api/sysinfo' && req.method === 'GET') {
+    const session = requireAuth(req, res);
+    if (!session) return;
+
+    const totalMem = os.totalmem();
+    const freeMem  = os.freemem();
+
+    let disk = null;
+    try {
+      const s = await fs.promises.statfs('/');
+      const total = s.bsize * s.blocks;
+      const avail = s.bsize * s.bavail;
+      disk = { total, free: avail, used: total - avail };
+    } catch {}
+
+    return json(res, 200, {
+      cpu:      { model: os.cpus()[0]?.model || 'Unknown', cores: os.cpus().length, loadAvg: os.loadavg() },
+      mem:      { total: totalMem, free: freeMem, used: totalMem - freeMem },
+      disk,
+      uptime:   os.uptime(),
+      os:       osReleaseName,
+      node:     process.version,
+      hostname: os.hostname(),
+    });
+  }
+
   // ── GET /api/alerts ───────────────────────────────────────────────────────
   if (pathname === '/api/alerts' && req.method === 'GET') {
     const session = requireAuth(req, res, 'admin');
@@ -933,6 +961,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+
+// ── OS release name (read once at boot) ──────────────────────────────────────
+
+let osReleaseName = `${os.platform()} ${os.release()}`;
+fs.readFile('/etc/os-release', 'utf8', (err, data) => {
+  if (err) return;
+  const m = data.match(/^PRETTY_NAME="(.+)"/m);
+  if (m) osReleaseName = m[1];
+});
 
 ensureCredentials();
 

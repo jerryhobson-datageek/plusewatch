@@ -592,6 +592,83 @@
     cursor: pointer;
   }
 
+  /* ── SERVER STATS ── */
+  .sysinfo-section { margin-top: 2rem; }
+
+  .sysinfo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 700px) { .sysinfo-grid { grid-template-columns: 1fr; } }
+
+  .sysinfo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background 0.2s;
+  }
+  .sysinfo-card:hover { background: var(--surface-hover); }
+
+  .sysinfo-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .sysinfo-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  .sysinfo-unit {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .sysinfo-bar-wrap {
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 2px 0;
+  }
+  :root[data-theme="light"] .sysinfo-bar-wrap { background: rgba(0,0,0,0.08); }
+
+  .sysinfo-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease, background 0.3s;
+  }
+
+  .sysinfo-sub { font-size: 0.72rem; color: var(--muted); }
+
+  .sysinfo-meta {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1rem 1.5rem;
+    display: flex;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+    backdrop-filter: blur(12px);
+  }
+
+  .sysinfo-meta-item { display: flex; flex-direction: column; gap: 3px; }
+  .sysinfo-meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .sysinfo-meta-value { font-size: 0.85rem; font-weight: 500; color: var(--text); }
+
   /* ── TOAST ── */
   .toast-container {
     position: fixed;
@@ -1553,6 +1630,51 @@
   <!-- Monitor Cards Grid -->
   <div class="monitors-grid" id="monitorsGrid"></div>
 
+  <!-- Server Stats -->
+  <div class="sysinfo-section">
+    <div class="section-header" style="margin-top:2rem">
+      <div class="section-title">Server</div>
+    </div>
+    <div class="sysinfo-grid">
+      <div class="sysinfo-card">
+        <div class="sysinfo-label">CPU Load</div>
+        <div class="sysinfo-value" id="sysinfoCpuVal">—</div>
+        <div class="sysinfo-bar-wrap"><div class="sysinfo-bar" id="sysinfoCpuBar" style="width:0%"></div></div>
+        <div class="sysinfo-sub" id="sysinfoCpuSub">—</div>
+      </div>
+      <div class="sysinfo-card">
+        <div class="sysinfo-label">RAM</div>
+        <div class="sysinfo-value" id="sysinfoRamVal">—</div>
+        <div class="sysinfo-bar-wrap"><div class="sysinfo-bar" id="sysinfoRamBar" style="width:0%"></div></div>
+        <div class="sysinfo-sub" id="sysinfoRamSub">—</div>
+      </div>
+      <div class="sysinfo-card">
+        <div class="sysinfo-label">Disk</div>
+        <div class="sysinfo-value" id="sysinfoDiskVal">—</div>
+        <div class="sysinfo-bar-wrap"><div class="sysinfo-bar" id="sysinfoDiskBar" style="width:0%"></div></div>
+        <div class="sysinfo-sub" id="sysinfoDiskSub">—</div>
+      </div>
+    </div>
+    <div class="sysinfo-meta">
+      <div class="sysinfo-meta-item">
+        <div class="sysinfo-meta-label">OS</div>
+        <div class="sysinfo-meta-value" id="sysinfoOs">—</div>
+      </div>
+      <div class="sysinfo-meta-item">
+        <div class="sysinfo-meta-label">Uptime</div>
+        <div class="sysinfo-meta-value" id="sysinfoUptime">—</div>
+      </div>
+      <div class="sysinfo-meta-item">
+        <div class="sysinfo-meta-label">Hostname</div>
+        <div class="sysinfo-meta-value" id="sysinfoHost">—</div>
+      </div>
+      <div class="sysinfo-meta-item">
+        <div class="sysinfo-meta-label">Node.js</div>
+        <div class="sysinfo-meta-value" id="sysinfoNode">—</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Service Management (admin only) -->
   <div class="maint-section admin-only" id="servicesSection">
     <div class="section-header">
@@ -1681,6 +1803,7 @@ async function doLogin() {
     setUserBadge(currentUser);
     hideLogin();
     fetchStatus();
+    fetchSysInfo();
     fetchMaintenance();
     fetchServicesList();
     fetchIncidents();
@@ -1712,6 +1835,7 @@ async function checkAuth() {
     setUserBadge(currentUser);
     hideLogin();
     fetchStatus();
+    fetchSysInfo();
     fetchMaintenance();
     fetchServicesList();
     fetchIncidents();
@@ -2673,6 +2797,68 @@ function fmtHistLabel(ts, range) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// ─── SERVER STATS ─────────────────────────────────────────────────────────────
+
+function fmtBytes(b) {
+  if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
+  if (b >= 1e6) return (b / 1e6).toFixed(0) + ' MB';
+  return b + ' B';
+}
+
+function fmtUptime(s) {
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function barColor(pct) {
+  if (pct < 70) return 'var(--green)';
+  if (pct < 90) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+async function fetchSysInfo() {
+  try {
+    const res = await fetch('/api/sysinfo', { headers: authHeaders() });
+    if (!res.ok) return;
+    renderSysInfo(await res.json());
+  } catch {}
+}
+
+function renderSysInfo(d) {
+  const loadPct = Math.min(100, Math.round(d.cpu.loadAvg[0] / d.cpu.cores * 100));
+  document.getElementById('sysinfoCpuVal').textContent     = d.cpu.loadAvg[0].toFixed(2);
+  document.getElementById('sysinfoCpuSub').textContent     = `${d.cpu.cores} cores · 5m: ${d.cpu.loadAvg[1].toFixed(2)} · 15m: ${d.cpu.loadAvg[2].toFixed(2)}`;
+  document.getElementById('sysinfoCpuBar').style.width     = loadPct + '%';
+  document.getElementById('sysinfoCpuBar').style.background = barColor(loadPct);
+
+  const ramPct   = Math.round(d.mem.used / d.mem.total * 100);
+  const ramUsed  = fmtBytes(d.mem.used);
+  const ramTotal = fmtBytes(d.mem.total);
+  document.getElementById('sysinfoRamVal').textContent     = ramUsed;
+  document.getElementById('sysinfoRamSub').textContent     = `${ramUsed} of ${ramTotal} · ${ramPct}%`;
+  document.getElementById('sysinfoRamBar').style.width     = ramPct + '%';
+  document.getElementById('sysinfoRamBar').style.background = barColor(ramPct);
+
+  if (d.disk) {
+    const diskPct   = Math.round(d.disk.used / d.disk.total * 100);
+    const diskUsed  = fmtBytes(d.disk.used);
+    const diskTotal = fmtBytes(d.disk.total);
+    document.getElementById('sysinfoDiskVal').textContent     = diskPct + '%';
+    document.getElementById('sysinfoDiskSub').textContent     = `${diskUsed} of ${diskTotal} used`;
+    document.getElementById('sysinfoDiskBar').style.width     = diskPct + '%';
+    document.getElementById('sysinfoDiskBar').style.background = barColor(diskPct);
+  }
+
+  document.getElementById('sysinfoOs').textContent     = d.os;
+  document.getElementById('sysinfoUptime').textContent = fmtUptime(d.uptime);
+  document.getElementById('sysinfoHost').textContent   = d.hostname;
+  document.getElementById('sysinfoNode').textContent   = d.node;
+}
+
 // ─── ALERT WEBHOOKS ──────────────────────────────────────────────────────────
 
 let alertsConfig = null;
@@ -2817,6 +3003,7 @@ function updateClock() {
 checkAuth();                          // validate token or show login screen
 updateClock();
 setInterval(fetchStatus,      15000); // uptime polling
+setInterval(fetchSysInfo,     15000); // server stats polling
 setInterval(fetchMaintenance, 60000); // maintenance polling every minute
 setInterval(fetchIncidents,   60000); // incident log refresh
 setInterval(updateClock,       1000);

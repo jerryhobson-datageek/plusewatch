@@ -63,6 +63,37 @@ const stmtAgg     = db.prepare(`
   GROUP BY bucket
   ORDER BY bucket ASC
 `);
+const stmtUptime24h = db.prepare(`
+  SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS upCount
+  FROM checks WHERE svc_id = ? AND ts >= ?
+`);
+
+// ── Incidents ─────────────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS incidents (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    svc_id      INTEGER NOT NULL,
+    svc_name    TEXT    NOT NULL,
+    status      TEXT    NOT NULL,
+    started_at  INTEGER NOT NULL,
+    resolved_at INTEGER,
+    duration_ms INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_inc_svc ON incidents(svc_id, started_at);
+`);
+const stmtOpenIncident   = db.prepare(
+  `INSERT INTO incidents (svc_id, svc_name, status, started_at) VALUES (?, ?, ?, ?)`
+);
+const stmtCloseIncident  = db.prepare(
+  `UPDATE incidents SET resolved_at=?, duration_ms=? WHERE id=?`
+);
+const stmtGetOpenIncident = db.prepare(
+  `SELECT id, started_at FROM incidents WHERE svc_id=? AND resolved_at IS NULL ORDER BY started_at DESC LIMIT 1`
+);
+const stmtFetchIncidents = db.prepare(
+  `SELECT * FROM incidents ORDER BY started_at DESC LIMIT ?`
+);
 
 function pruneHistory() {
   stmtPrune.run(Date.now() - HISTORY_DAYS * 86_400_000);
@@ -184,6 +215,8 @@ function isHTTPS(svc) {
 
 const state = {};
 for (const svc of config.services) {
+  const u24 = stmtUptime24h.get(svc.id, Date.now() - 86_400_000);
+  const openInc = stmtGetOpenIncident.get(svc.id);
   state[svc.id] = {
     id:                svc.id,
     name:              svc.name,
@@ -195,6 +228,9 @@ for (const svc of config.services) {
     lastCheck:         null,
     maintenance:       null,
     degradedThreshold: svc.degradedThreshold || null,
+    uptime24h:         u24.total ? parseFloat((u24.upCount / u24.total * 100).toFixed(2)) : null,
+    openIncidentId:    openInc?.id    ?? null,
+    openIncidentStart: openInc?.started_at ?? null,
     ssl: isHTTPS(svc)
       ? { status: 'pending', daysLeft: null, expiry: null }
       : null,
@@ -328,6 +364,7 @@ async function runCheck(svc) {
   if (activeWindow) result.status = 'maintenance';
 
   const d = state[svc.id];
+  const prevStatus = d.status;
   d.status      = result.status;
   d.rt          = result.status === 'maintenance' ? null : result.rt;
   d.lastCheck   = new Date().toISOString();
@@ -338,6 +375,25 @@ async function runCheck(svc) {
   d.history.push({ status: result.status, rt: result.rt, ts });
   if (d.history.length > HISTORY_SIZE) d.history.shift();
   stmtInsert.run(svc.id, result.status, result.rt ?? null, ts);
+
+  // Uptime 24h
+  const u24 = stmtUptime24h.get(svc.id, ts - 86_400_000);
+  d.uptime24h = u24.total ? parseFloat((u24.upCount / u24.total * 100).toFixed(2)) : null;
+
+  // Incident tracking (ignore maintenance transitions)
+  const isOutage = s => s === 'down' || s === 'degraded';
+  if (prevStatus !== 'pending' && prevStatus !== result.status && result.status !== 'maintenance' && prevStatus !== 'maintenance') {
+    if (isOutage(result.status) && !isOutage(prevStatus)) {
+      const r = stmtOpenIncident.run(svc.id, svc.name, result.status, ts);
+      d.openIncidentId    = r.lastInsertRowid;
+      d.openIncidentStart = ts;
+    } else if (!isOutage(result.status) && d.openIncidentId) {
+      const duration = d.openIncidentStart ? ts - d.openIncidentStart : null;
+      stmtCloseIncident.run(ts, duration, d.openIncidentId);
+      d.openIncidentId    = null;
+      d.openIncidentStart = null;
+    }
+  }
 
   const icon = result.status === 'up' ? '✓' : result.status === 'maintenance' ? '🔧' : result.status === 'degraded' ? '⚠' : '✗';
   console.log(`[${d.lastCheck}] ${icon} ${svc.name.padEnd(20)} ${result.status.padEnd(12)} ${result.rt ?? '—'}ms`);
@@ -614,6 +670,14 @@ const server = http.createServer(async (req, res) => {
 
     console.log(`[Services] Deleted: ${svc.name} (id=${id}) by ${session.username}`);
     return json(res, 200, { ok: true });
+  }
+
+  // ── GET /api/incidents ────────────────────────────────────────────────────
+  if (pathname === '/api/incidents' && req.method === 'GET') {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const limit = Math.min(parseInt(new URL(req.url, `http://localhost:${PORT}`).searchParams.get('limit') || '30'), 100);
+    return json(res, 200, { incidents: stmtFetchIncidents.all(limit) });
   }
 
   // ── GET /api/status ────────────────────────────────────────────────────────

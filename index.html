@@ -525,6 +525,21 @@
   .incident-service { color: var(--muted); font-size: 0.75rem; }
   .incident-time { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
 
+  .incident-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  .incident-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .badge-ongoing  { background: rgba(244,63,94,0.12);  color: var(--red);   border: 1px solid rgba(244,63,94,0.25); }
+  .badge-resolved { background: rgba(34,211,160,0.08); color: var(--green); border: 1px solid rgba(34,211,160,0.15); }
+
   /* ── TOAST ── */
   .toast-container {
     position: fixed;
@@ -1578,6 +1593,7 @@ async function doLogin() {
     fetchStatus();
     fetchMaintenance();
     fetchServicesList();
+    fetchIncidents();
   } catch {
     showLoginError('Could not reach server.');
   } finally {
@@ -1607,6 +1623,7 @@ async function checkAuth() {
     fetchStatus();
     fetchMaintenance();
     fetchServicesList();
+    fetchIncidents();
   } catch {
     showLogin();
   }
@@ -1709,11 +1726,11 @@ async function doChangePassword() {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
-let SERVICES    = [];
-const state     = {};
-const prevStat  = {};
-const incidents = [];
-const charts    = {};
+let SERVICES       = [];
+const state        = {};
+const prevStat     = {};
+const charts       = {};
+let incidentsData  = [];
 let sortMode    = 'status';
 let initialized = false;
 let currentHistId  = null;
@@ -1756,7 +1773,7 @@ function timeAgo(date) {
 // ─── RENDER ───────────────────────────────────────────────────────────────────
 
 function renderCard(d) {
-  const pct    = uptimePct(d.history);
+  const pct    = d.uptime24h != null ? d.uptime24h.toFixed(2) : uptimePct(d.history);
   const pctNum = parseFloat(pct) || 0;
   const radius = 14;
   const circ   = 2 * Math.PI * radius;
@@ -1804,7 +1821,7 @@ function renderCard(d) {
 
     <div class="card-stats">
       <div class="stat-item">
-        <div class="stat-label">Uptime</div>
+        <div class="stat-label">24h Uptime</div>
         <div class="stat-value" style="color:${hex}">${pctDisplay}</div>
       </div>
       <div class="stat-item">
@@ -1959,7 +1976,7 @@ function updateCards() {
     const card = document.getElementById(`card-${d.id}`);
     if (!card) return;
 
-    const pct     = uptimePct(d.history);
+    const pct     = d.uptime24h != null ? d.uptime24h.toFixed(2) : uptimePct(d.history);
     const pctNum  = parseFloat(pct) || 0;
     const hex     = colHex(d.status);
     const radius  = 14;
@@ -2023,28 +2040,49 @@ function updateCards() {
 
 // ─── INCIDENTS ────────────────────────────────────────────────────────────────
 
-function addIncident(svc, newStatus) {
-  const msgs = {
-    down:     `${svc.name} is unreachable`,
-    degraded: `${svc.name} response time elevated (${svc.rt} ms)`,
-    up:       `${svc.name} recovered and is operational`,
-  };
-  incidents.unshift({ status: newStatus, msg: msgs[newStatus] || `${svc.name} → ${newStatus}`, time: new Date() });
-  if (incidents.length > 20) incidents.pop();
+function fmtDuration(ms) {
+  if (ms == null) return null;
+  const s = Math.floor(ms / 1000);
+  if (s < 60)  return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60)  return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+async function fetchIncidents() {
+  try {
+    const res = await fetch('/api/incidents?limit=20', { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    incidentsData = data.incidents || [];
+    renderIncidents();
+  } catch {}
 }
 
 function renderIncidents() {
   const list = document.getElementById('incidentList');
-  if (!incidents.length) {
-    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No incidents yet.</span></div>`;
+  if (!incidentsData.length) {
+    list.innerHTML = `<div class="incident-item"><span style="color:var(--muted);font-size:0.8rem">No incidents recorded yet.</span></div>`;
     return;
   }
-  list.innerHTML = incidents.slice(0, 8).map(inc => {
-    const col = inc.status === 'up' ? 'var(--green)' : inc.status === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+  list.innerHTML = incidentsData.map(inc => {
+    const resolved = inc.resolved_at != null;
+    const col      = inc.status === 'degraded' ? 'var(--yellow)' : 'var(--red)';
+    const action   = inc.status === 'degraded' ? 'degraded' : 'went down';
+    const dur      = fmtDuration(inc.duration_ms);
+    const meta     = resolved && dur ? `${action} · ${dur} duration` : action;
     return `<div class="incident-item">
       <div class="incident-dot" style="background:${col}"></div>
-      <div class="incident-msg">${inc.msg}</div>
-      <div class="incident-time">${timeAgo(inc.time)}</div>
+      <div class="incident-msg">
+        <div>${inc.svc_name}</div>
+        <div class="incident-meta">${meta}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="incident-badge ${resolved ? 'badge-resolved' : 'badge-ongoing'}">${resolved ? 'Resolved' : 'Ongoing'}</span>
+        <div class="incident-time">${timeAgo(inc.started_at)}</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2088,7 +2126,6 @@ async function fetchStatus() {
     }
 
     for (const { svc, newStatus } of changed) {
-      addIncident(svc, newStatus);
       showToast(svc.name, newStatus);
     }
 
@@ -2102,7 +2139,7 @@ async function fetchStatus() {
       showSSLToast(svc.name, sslStatus, msgs[sslStatus]);
     }
 
-    if (changed.length || sslChanged.length) renderIncidents();
+    if (changed.length) fetchIncidents();
 
     // Refresh service list status dots
     if (currentUser?.role === 'admin' && servicesCache.length) renderServicesList();
@@ -2567,6 +2604,7 @@ checkAuth();                          // validate token or show login screen
 updateClock();
 setInterval(fetchStatus,      15000); // uptime polling
 setInterval(fetchMaintenance, 60000); // maintenance polling every minute
+setInterval(fetchIncidents,   60000); // incident log refresh
 setInterval(updateClock,       1000);
 </script>
 </body>

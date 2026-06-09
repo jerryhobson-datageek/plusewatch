@@ -333,7 +333,7 @@ function sendWebhook(webhookUrl, payload) {
   });
 }
 
-function buildWebhookPayload(webhookUrl, svc, status, isTest = false) {
+function buildWebhookPayload(webhookUrl, svc, status, rt = null, isTest = false) {
   const icons  = { up: '✅', down: '🔴', degraded: '⚠️' };
   const labels = { up: 'Recovered', down: 'DOWN', degraded: 'Degraded' };
   const prefix = isTest ? '[TEST] ' : '';
@@ -346,8 +346,8 @@ function buildWebhookPayload(webhookUrl, svc, status, isTest = false) {
         title,
         color:  colors[status] || 0x64748b,
         fields: [
-          { name: 'URL',           value: svc.url,                           inline: true },
-          { name: 'Response Time', value: svc.rt != null ? `${svc.rt} ms` : '—', inline: true },
+          { name: 'URL',           value: svc.url,                                    inline: true },
+          { name: 'Response Time', value: (rt != null && status !== 'down') ? `${rt} ms` : '—', inline: true },
         ],
         timestamp: new Date().toISOString(),
         footer:    { text: 'PulseWatch' },
@@ -362,8 +362,8 @@ function buildWebhookPayload(webhookUrl, svc, status, isTest = false) {
     attachments: [{
       color:  slackColors[status] || '#64748b',
       fields: [
-        { title: 'URL',           value: svc.url,                           short: true },
-        { title: 'Response Time', value: svc.rt != null ? `${svc.rt} ms` : '—', short: true },
+        { title: 'URL',           value: svc.url,                                    short: true },
+        { title: 'Response Time', value: (rt != null && status !== 'down') ? `${rt} ms` : '—', short: true },
       ],
       ts:     Math.floor(Date.now() / 1000),
       footer: 'PulseWatch',
@@ -376,7 +376,7 @@ function buildWebhookPayload(webhookUrl, svc, status, isTest = false) {
   };
 }
 
-async function fireAlerts(svc, newStatus) {
+async function fireAlerts(svc, newStatus, rt = null) {
   const cfg = loadConfig();
   const webhooks = cfg.alerts?.webhooks || [];
   if (!webhooks.length) return;
@@ -386,7 +386,7 @@ async function fireAlerts(svc, newStatus) {
   for (const wh of webhooks) {
     if (!wh.enabled || !wh.url) continue;
     if (!(wh.events || ['down', 'up']).includes(newStatus)) continue;
-    const payload = buildWebhookPayload(wh.url, svc, newStatus);
+    const payload = buildWebhookPayload(wh.url, svc, newStatus, rt);
     const ok = await sendWebhook(wh.url, payload);
     console.log(`[Alert] Webhook "${wh.name}" → ${newStatus} for ${svc.name}: ${ok ? 'OK' : 'FAILED'}`);
   }
@@ -492,7 +492,7 @@ async function runCheck(svc) {
       d.openIncidentId    = null;
       d.openIncidentStart = null;
     }
-    fireAlerts(svc, result.status).catch(err => console.error('[Alert] Error:', err.message));
+    fireAlerts(svc, result.status, result.rt).catch(err => console.error('[Alert] Error:', err.message));
   }
 
   const icon = result.status === 'up' ? '✓' : result.status === 'maintenance' ? '🔧' : result.status === 'degraded' ? '⚠' : '✗';
@@ -841,8 +841,8 @@ const server = http.createServer(async (req, res) => {
     config = loadConfig();
     const wh = (config.alerts?.webhooks || []).find(w => w.id === id);
     if (!wh) return json(res, 404, { error: 'Webhook not found' });
-    const testSvc = { name: 'PulseWatch', url: `http://localhost:${PORT}`, rt: 42 };
-    const payload = buildWebhookPayload(wh.url, testSvc, 'down', true);
+    const testSvc = { name: 'PulseWatch', url: `http://localhost:${PORT}` };
+    const payload = buildWebhookPayload(wh.url, testSvc, 'down', null, true);
     const ok = await sendWebhook(wh.url, payload);
     console.log(`[Alerts] Test webhook "${wh.name}": ${ok ? 'OK' : 'FAILED'}`);
     return json(res, ok ? 200 : 502, { ok, message: ok ? 'Test alert sent' : 'Webhook delivery failed — check the URL' });

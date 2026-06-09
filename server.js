@@ -339,7 +339,7 @@ function buildWebhookPayload(webhookUrl, svc, status, isTest = false) {
   const prefix = isTest ? '[TEST] ' : '';
   const title  = `${prefix}${icons[status] || '?'} ${svc.name} is ${labels[status] || status}`;
 
-  if (webhookUrl.includes('discord.com/api/webhooks')) {
+  if (/discordapp?\.com\/api\/webhooks/i.test(webhookUrl)) {
     const colors = { up: 0x22d3a0, down: 0xf43f5e, degraded: 0xf59e0b };
     return {
       embeds: [{

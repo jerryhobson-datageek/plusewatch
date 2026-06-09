@@ -1,12 +1,12 @@
 # PulseWatch
 
-A self-hosted uptime and status dashboard. Monitor HTTP and TCP services with live status, response times, sparklines, SSL tracking, persistent check history, webhook alerting, and server stats.
+A self-hosted uptime and status dashboard. Monitor HTTP, TCP, and PING services with live status, response times, sparklines, SSL tracking, persistent check history, webhook alerting, and server stats.
 
 ![Dashboard dark](docs/screenshots/dashboard_dark.png)
 
 ## Features
 
-- **Live monitoring** — HTTP and TCP checks on configurable intervals
+- **Live monitoring** — HTTP, TCP, and PING checks on configurable intervals
 - **Server stats** — live CPU load, RAM, disk usage, OS, uptime, and hostname
 - **24h uptime %** — per-card uptime driven by SQLite, not a rolling buffer
 - **Response time sparklines** — last 60 checks visualised per service card
@@ -105,8 +105,8 @@ Services can be managed through the Admin UI (Services section on the dashboard)
 |---|---|---|
 | `id` | Yes | Unique integer |
 | `name` | Yes | Display name |
-| `url` | Yes | Full URL for HTTP/HTTPS, or `host:port` for TCP |
-| `type` | Yes | `HTTP` or `TCP` |
+| `url` | Yes | Full URL for HTTP/HTTPS · `host:port` for TCP · hostname or IP for PING |
+| `type` | Yes | `HTTP`, `TCP`, or `PING` |
 | `interval` | No | Check interval in seconds (default: global or 30) |
 | `degradedThreshold` | No | RT in ms above which status turns yellow |
 | `timeout` | No | Request timeout in ms (default: 5000) |

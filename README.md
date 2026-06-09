@@ -181,11 +181,23 @@ The underlying data is served from `GET /api/public/status` which also requires 
 
 ## Webhook alerting
 
-Add webhooks via the Admin UI (Alert Webhooks section). Discord, Slack, and generic HTTP endpoints are supported. Each webhook can be configured to fire on **Down**, **Degraded**, and/or **Recovery** events.
+Alerts fire when a service changes status. Each webhook can be configured to fire on **Down**, **Degraded**, and/or **Recovery** events. A per-service cooldown (default 300 s) prevents alert spam when a service flaps.
 
-Discord webhook URLs (`discord.com/api/webhooks/…`) receive rich embeds with colour-coded status. All other URLs receive a generic JSON payload compatible with Slack incoming webhooks.
+### Setting up Discord alerts
 
-A per-service cooldown (default 300 s) prevents alert spam when a service flaps.
+1. Open your Discord server → **Server Settings** → **Integrations** → **Webhooks**
+2. Click **New Webhook**, give it a name and choose a channel, then click **Copy Webhook URL**
+3. In PulseWatch, log in as admin and scroll to the **Alert Webhooks** section
+4. Click **＋ Add Webhook**, paste the URL, set a name, choose which events to fire on, and click **Save**
+5. Click **Test** on the new row — a test embed should appear in your Discord channel immediately
+
+Discord webhook URLs (`discord.com/api/webhooks/…`) automatically receive rich embeds with colour-coded status and response time. All other URLs receive a generic JSON payload compatible with Slack incoming webhooks.
+
+> **Security:** treat your webhook URL like a password — it allows anyone to post to that channel. If it's ever exposed, regenerate it in Discord and update PulseWatch via the Edit button.
+
+### Consecutive failure threshold
+
+By default PulseWatch alerts on the first failure. To require N consecutive failures before alerting (avoiding false positives from transient blips), set **Alert after N failures** when adding or editing a service in the admin UI. The card will show a dimmed `1/3` → `2/3` counter while below the threshold.
 
 ## API
 

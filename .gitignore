@@ -6,3 +6,5 @@ node_modules/
 verify_*.py
 ss_*.py
 ~$*
+/securescout/
+/SecureScout.docx

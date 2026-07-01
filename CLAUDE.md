@@ -68,6 +68,33 @@ ssh -i /c/Users/jerry/.ssh/id_rsa root@2.24.107.27 "systemctl restart pulsewatch
 | F2B Dev Portal | https://dev.field2base.com | HTTP, 120s interval |
 | SecureScout | https://security.newtekk.com | HTTP |
 | NewTekk Auth | https://auth.newtekk.com | HTTP |
+| NewTekk Manage | https://manage.newtekk.com | HTTP |
+
+## NewTekk Manage
+Customer portal for managing VPS servers, NewTekk apps, and billing.
+
+- GitHub: https://github.com/jerryhobson-datageek/newtekk-manage.git
+- Local: `C:\newtekk-manage`
+- Branch: `main`
+- Public URL: **https://manage.newtekk.com**
+- Port: `3004`
+
+### Server layout (VPS)
+| Path | Purpose |
+|---|---|
+| `/root/newtekk-manage/` | Git clone — pull updates here |
+| `/opt/newtekk-manage/` | Running copy |
+| `/etc/systemd/system/newtekk-manage.service` | Systemd unit file |
+
+### Deployment workflow
+```bash
+ssh -i /c/Users/jerry/.ssh/id_rsa root@2.24.107.27 "cd /root/newtekk-manage && git pull && cp server.js index.html /opt/newtekk-manage/ && systemctl restart newtekk-manage"
+```
+
+### Config files (do not overwrite on deploy)
+- `/opt/newtekk-manage/config.json` — port, Hostinger token, auth URL, apps list
+
+---
 
 ## NewTekk Auth
 Centralised JWT authentication server for all NewTekk apps.
